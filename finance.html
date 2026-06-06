@@ -341,7 +341,9 @@ body {
 .holdingPriceNative { color: var(--muted); opacity: 0.7; font-size: 11px; }
 .holdingCost { font-family: var(--font-mono); font-size: 10px; color: var(--muted); opacity: 0.85; cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; }
 .holdingCost:hover { background: var(--brand-soft); color: var(--brand); opacity: 1; }
-.holdingCostInput { width: 78px; }
+.holdingCostEdit { display:inline-flex; align-items:center; gap: 4px; }
+.holdingCostInput { width: 62px; }
+.holdingCostCcy { appearance:auto; font-family: var(--font-mono); font-size: 10px; color: var(--fg); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 3px; cursor: pointer; }
 .gainPct { font-family: var(--font-mono); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 1px 5px; border-radius: var(--radius-pill); margin-left: 6px; }
 .gainPct.up { background: var(--pos-soft); color: var(--pos); }
 .gainPct.down { background: var(--neg-soft); color: var(--neg); }
@@ -694,10 +696,10 @@ const actions = {
   setHoldingShares(id, shares) { const a = state.accounts.find(x => x.id === id); if (a && a.type === 'stocks' && a.ticker && isFinite(shares) && shares >= 0) a.shares = shares; save(); render(); },
   // Average purchase price PER SHARE, stored as entered + the currency it was
   // typed in, so the displayed cost is FX-stable. Empty/zero clears it.
-  setHoldingCost(id, displayAmount) {
+  setHoldingCost(id, displayAmount, ccy) {
     const a = state.accounts.find(x => x.id === id); if (!a || a.type !== 'stocks' || !a.ticker) return;
     if (!isFinite(displayAmount) || displayAmount <= 0) { delete a.costEntered; delete a.costCcy; }
-    else { a.costEntered = displayAmount; a.costCcy = state.currency; }
+    else { a.costEntered = displayAmount; a.costCcy = (ccy && CURRENCIES.indexOf(ccy) >= 0) ? ccy : state.currency; }
     save(); render();
   },
 
@@ -1018,8 +1020,13 @@ function holdingRowHtml(acct) {
   // tappable to set/edit. When unset, a faint "+ avg cost" prompt.
   const editingCost = ui.edit && ui.edit.id === acct.id && ui.edit.field === 'cost';
   const hasCost = isFinite(Number(acct.costEntered)) && Number(acct.costEntered) > 0;
+  const costCcy = acct.costCcy || state.currency;
+  const ccyOptions = CURRENCIES.map(c => '<option value="' + c + '"' + (c === costCcy ? ' selected' : '') + '>' + c + '</option>').join('');
   const costCell = editingCost
-    ? '<input class="inlineEditInput holdingCostInput" id="edit-cost-' + acct.id + '" type="number" step="0.0001" placeholder="cost / share" value="' + (hasCost ? esc(String(acct.costEntered)) : '') + '" data-edit="cost" data-id="' + acct.id + '" />'
+    ? '<span class="holdingCostEdit">'
+      + '<input class="inlineEditInput holdingCostInput" id="edit-cost-' + acct.id + '" type="number" step="0.0001" placeholder="cost / share" value="' + (hasCost ? esc(String(acct.costEntered)) : '') + '" data-edit="cost" data-id="' + acct.id + '" />'
+      + '<select class="holdingCostCcy" id="edit-cost-ccy-' + acct.id + '" data-edit="cost" data-id="' + acct.id + '" title="Currency you paid in">' + ccyOptions + '</select>'
+      + '</span>'
     : (hasCost
         ? '<span class="holdingCost" data-act="editCost" data-id="' + acct.id + '" title="Average purchase price per share · tap to edit">@ ' + esc((acct.costCcy || state.currency) + ' ' + Number(acct.costEntered).toLocaleString('en-US', { maximumFractionDigits: 2 })) + '</span>'
         : '<span class="holdingCost" data-act="editCost" data-id="' + acct.id + '" title="Set your average purchase price to track gain/loss">+ avg cost</span>');
@@ -1411,8 +1418,10 @@ async function refreshStockPrices(opts) {
       if (!j || !j.ok || !isFinite(Number(j.price))) { failed.push(a.ticker); return; }
       // The proxy may resolve a corrected symbol (e.g. WPL.PL → WPL.WA). Adopt it
       // so the ticker pill and future lookups use the symbol that actually quotes.
+      // Skip futures/FX-style symbols (contain "=", e.g. gold's GC=F) so a clean
+      // commodity ticker like XAU stays XAU on screen.
       const resolved = String(j.symbol || a.ticker).toUpperCase();
-      if (resolved && resolved !== a.ticker) { if (a.name === a.ticker) a.name = resolved; a.ticker = resolved; }
+      if (resolved && resolved !== a.ticker && !resolved.includes('=')) { if (a.name === a.ticker) a.name = resolved; a.ticker = resolved; }
       // Yahoo returns the price in the listing's native currency. Normalise
       // minor-unit quotes (London pence GBp/GBX, ZA cents, IL agorot) to the
       // major unit, then convert native → CHF (our base) via the FX feed.
@@ -1612,7 +1621,7 @@ function commitAmt(id, val) {
   actions.setAccountAmount(id, Math.max(0, nextDisplay));
 }
 function commitShares(id, val) { const next = parseFloat(val); ui.edit = null; if (!isNaN(next) && next >= 0) actions.setHoldingShares(id, next); else render(); }
-function commitCost(id, val) { ui.edit = null; const s = String(val).trim(); if (s === '') { actions.setHoldingCost(id, 0); return; } const next = parseFloat(s); if (!isNaN(next)) actions.setHoldingCost(id, next); else render(); }
+function commitCost(id, val, ccy) { ui.edit = null; const s = String(val).trim(); if (s === '') { actions.setHoldingCost(id, 0); return; } const next = parseFloat(s); if (!isNaN(next)) actions.setHoldingCost(id, next, ccy); else render(); }
 
 /* ============================================================
  * Event wiring
@@ -1655,7 +1664,13 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('blur', e => {
   const t = e.target;
-  if (t.dataset && t.dataset.edit) commitEdit(t);
+  if (t.dataset && t.dataset.edit) {
+    // Don't commit when focus moves between fields of the same inline editor
+    // (e.g. the cost amount input ↔ its currency selector).
+    const rt = e.relatedTarget;
+    if (rt && rt.dataset && rt.dataset.edit === t.dataset.edit && rt.dataset.id === t.dataset.id) return;
+    commitEdit(t);
+  }
 }, true);
 
 function commitEdit(t) {
@@ -1664,7 +1679,13 @@ function commitEdit(t) {
   if (field === 'name') commitName(id, t.value);
   else if (field === 'amt') commitAmt(id, t.value);
   else if (field === 'shares') commitShares(id, t.value);
-  else if (field === 'cost') commitCost(id, t.value);
+  else if (field === 'cost') {
+    // Cost has two fields (amount + currency); read both by id regardless of
+    // which one triggered the commit.
+    const inp = document.getElementById('edit-cost-' + id);
+    const sel = document.getElementById('edit-cost-ccy-' + id);
+    commitCost(id, inp ? inp.value : t.value, sel ? sel.value : state.currency);
+  }
 }
 
 document.addEventListener('click', e => {

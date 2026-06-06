@@ -41,10 +41,26 @@ const SUFFIX_FIX = {
   US: '', USA: '',          // US → no suffix
 };
 
-// Build the list of symbols to try: the raw input first, then a corrected
-// suffix if the input's suffix looks like a country-code mistake.
+// Commodities: ISO metal codes / plain names → Yahoo front-month futures, which
+// quote reliably (in USD). Front-month future ≈ spot for a personal tracker.
+const COMMODITY_ALIAS = {
+  XAU: 'GC=F', GOLD: 'GC=F',         // gold (USD / troy oz)
+  XAG: 'SI=F', SILVER: 'SI=F',       // silver (USD / troy oz)
+  XPT: 'PL=F', PLATINUM: 'PL=F',     // platinum
+  XPD: 'PA=F', PALLADIUM: 'PA=F',    // palladium
+  COPPER: 'HG=F',                    // copper (USD / lb)
+  WTI: 'CL=F', CRUDE: 'CL=F', OIL: 'CL=F', // WTI crude (USD / bbl)
+  BRENT: 'BZ=F',                     // Brent crude
+  NATGAS: 'NG=F', NGAS: 'NG=F',      // natural gas
+};
+
+// Build the list of symbols to try: the raw input first, then a commodity
+// alias, then a corrected suffix if the input's suffix looks like a
+// country-code mistake.
 function candidates(symbol) {
   const out = [symbol];
+  const up = symbol.toUpperCase();
+  if (COMMODITY_ALIAS[up] && COMMODITY_ALIAS[up] !== symbol) out.push(COMMODITY_ALIAS[up]);
   const m = symbol.match(/^(.+)\.([A-Za-z]+)$/);
   if (m) {
     const base = m[1], suf = m[2].toUpperCase();
