@@ -331,16 +331,36 @@ body {
 .newsBar { display:flex; align-items:center; justify-content:space-between; gap: var(--space-3); padding: 0 2px 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
 .newsUpdated { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .newsList { display:flex; flex-direction:column; }
-.newsItem { display:flex; align-items:flex-start; gap: var(--space-3); padding: 13px 6px; border-bottom: 1px solid var(--border); transition: background var(--duration) var(--ease-premium); }
+.newsItem { display:grid; grid-template-columns: 74px 1fr; align-items:start; gap: var(--space-3); padding: 13px 6px; border-bottom: 1px solid var(--border); text-decoration: none; transition: background var(--duration) var(--ease-premium); }
 .newsItem:hover { background: var(--surface-2); }
-.newsTag { flex-shrink:0; font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; padding: 3px 8px; border-radius: var(--radius-pill); border: 1px solid transparent; text-transform: uppercase; margin-top: 1px; }
+.newsTag { justify-self:start; box-sizing:border-box; min-width: 64px; text-align:center; font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; padding: 3px 8px; border-radius: var(--radius-pill); border: 1px solid transparent; text-transform: uppercase; margin-top: 2px; }
 .newsBody { display:flex; flex-direction:column; gap: 4px; min-width: 0; }
-.newsTitle { font-size: 0.97rem; line-height: 1.4; color: var(--fg); }
+.newsTitle { font-size: 0.97rem; line-height: 1.4; color: var(--fg); text-decoration: none; }
 .newsItem:hover .newsTitle { color: var(--brand-2); }
-.newsMeta { display:flex; align-items:center; gap: 7px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.newsMeta { display:flex; align-items:center; gap: 7px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-decoration: none; }
 .newsSrc { color: var(--muted-strong); }
 .newsMetaSep { opacity: 0.5; }
 .newsEmpty { text-align:center; color: var(--muted); font-size: var(--text-sm); padding: var(--space-10) 0; }
+/* AI brief + chat */
+.aiCard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--card-shadow); padding: var(--space-5); margin-bottom: var(--space-4); }
+.aiHead { display:flex; align-items:center; justify-content:space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+.aiTitle { display:inline-flex; align-items:center; gap: 8px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brand-2); }
+.aiTitle::before { content:""; width: 7px; height: 7px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 8px var(--brand-glow); }
+.aiBody { font-size: 0.96rem; line-height: 1.6; color: var(--muted-strong); }
+.aiBody strong { color: var(--fg); font-weight: 600; }
+.aiHint { font-size: var(--text-sm); color: var(--muted); }
+.aiBtn { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: var(--radius-pill); padding: 8px 16px; font-family: var(--font-ui); font-size: 12px; font-weight: 700; cursor: pointer; transition: filter var(--duration) var(--ease); }
+.aiBtn:hover:not(:disabled) { filter: brightness(1.08); } .aiBtn:disabled { opacity: 0.5; cursor: default; }
+.aiMeta { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.chatMsgs { display:flex; flex-direction:column; gap: 8px; max-height: 300px; overflow-y:auto; margin-bottom: var(--space-3); }
+.chatMsg { font-size: 0.92rem; line-height: 1.5; padding: 8px 12px; border-radius: var(--radius-md); max-width: 88%; }
+.chatMsg.user { align-self:flex-end; background: var(--brand-soft); border: 1px solid var(--brand-line); color: var(--fg); }
+.chatMsg.assistant { align-self:flex-start; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted-strong); }
+.chatRow { display:flex; gap: var(--space-3); }
+.chatInput { flex:1; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 10px 16px; color: var(--fg); font-family: var(--font-ui); font-size: 0.92rem; }
+.chatInput:focus { outline:none; border-color: var(--brand-line); }
+.chatSend { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: var(--radius-pill); padding: 0 18px; font-weight: 700; cursor: pointer; transition: filter var(--duration) var(--ease); }
+.chatSend:hover:not(:disabled) { filter: brightness(1.08); } .chatSend:disabled { opacity: 0.5; cursor: default; }
 
 /* Donut */
 .donutStage { position: relative; display:flex; align-items:center; justify-content:center; margin: var(--space-3) 0; }
@@ -721,6 +741,9 @@ const ui = {
   invHistBusy: false,
   newsBusy: false,
   newsFilter: null,  // when set, the stock-news feed shows only this ticker
+  summaryBusy: false,
+  chatBusy: false,
+  newsChat: [],      // transient chat history [{role,content}]
   holdingId: null,   // id of the holding whose detail pop-up is open
   show: {},          // bankAdd, cryptoAdd, otherAdd, stocksAdd, stocksManual
   edit: null,        // { id, field:'name'|'amt'|'shares' }
@@ -736,6 +759,7 @@ const ui = {
     subEdit: null,
     order: { mode: 'incoming', name: '', cost: '', from: '', arrival: '' },
     wish: { name: '', amount: '' },
+    newsChat: { q: '' },
   },
 };
 
@@ -1906,12 +1930,88 @@ async function loadStockNews(force) {
   ui.newsBusy = false; saveNews(); if (state.activeTab === 'news') render();
 }
 
+/* ---- AI brief + chat (Anthropic, browser-direct with the user's key) ---- */
+const NEWS_SUMMARY_KEY = 'finance_news_summary_v1';
+function loadNewsSummary() { try { return JSON.parse(localStorage.getItem(NEWS_SUMMARY_KEY) || 'null'); } catch { return null; } }
+function saveNewsSummary() { try { localStorage.setItem(NEWS_SUMMARY_KEY, JSON.stringify(newsSummary)); } catch {} }
+let newsSummary = loadNewsSummary();   // { text, at, error? }
+
+function newsContextText(perStock) {
+  const lines = [];
+  uniqueNewsSymbols().forEach(s => {
+    const e = newsCache[s]; if (!e || !e.items || !e.items.length) return;
+    lines.push('## ' + s + ' — ' + (e.name || s));
+    e.items.slice(0, perStock || 12).forEach(it => {
+      lines.push('- ' + it.title + (it.source ? ' (' + it.source + (it.published ? ', ' + new Date(it.published).toISOString().slice(0, 10) : '') + ')' : ''));
+    });
+  });
+  return lines.join('\n');
+}
+async function callClaudeMessages(system, messages, maxTokens) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': settings.anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({ model: settings.anthropicModel || DEFAULT_MODEL, max_tokens: maxTokens || 700, system: system, messages: messages }),
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || ('Anthropic error (HTTP ' + r.status + ')'));
+  return (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+}
+function fmtAiText(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'); }
+
+async function generateNewsSummary() {
+  if (!settings.anthropicKey) { openSettings(); return; }
+  if (!uniqueNewsSymbols().length) return;
+  ui.summaryBusy = true; render();
+  try {
+    const sys = 'You write a tight daily news brief for an investor. From the supplied headlines about their holdings, summarise what matters. Group by company using its ticker as a bold label. One or two sentences per holding capturing the key story and sentiment; skip holdings with nothing notable. Finish with a single bold "Takeaway:" line. Plain text only, concise, English.';
+    newsSummary = { text: await callClaudeMessages(sys, [{ role: 'user', content: 'Headlines:\n\n' + newsContextText(10) }], 800), at: Date.now() };
+    saveNewsSummary();
+  } catch (e) { newsSummary = { text: 'Could not generate the brief: ' + (e.message || 'error') + (settings.anthropicKey ? '' : ' — add an Anthropic key in settings.'), at: Date.now(), error: true }; }
+  ui.summaryBusy = false; render();
+}
+async function sendNewsChat() {
+  const q = (ui.drafts.newsChat.q || '').trim(); if (!q) return;
+  if (!settings.anthropicKey) { openSettings(); return; }
+  ui.newsChat.push({ role: 'user', content: q }); ui.drafts.newsChat.q = ''; ui.chatBusy = true; render();
+  try {
+    const sys = 'You are a concise assistant answering questions about the user\'s stock news. Use ONLY the headlines below; if the answer is not in them, say so plainly. Be brief and specific, cite the company ticker when relevant. English.\n\nHEADLINES:\n' + newsContextText(15);
+    const text = await callClaudeMessages(sys, ui.newsChat.map(m => ({ role: m.role, content: m.content })), 700);
+    ui.newsChat.push({ role: 'assistant', content: text });
+  } catch (e) { ui.newsChat.push({ role: 'assistant', content: 'Error: ' + (e.message || 'request failed') }); }
+  ui.chatBusy = false; render();
+}
+
+function aiSummaryHtml() {
+  if (!settings.anthropicKey) {
+    return '<div class="aiCard"><div class="aiHead"><span class="aiTitle">AI daily brief</span>'
+      + '<button type="button" class="aiBtn" data-act="openSettings">Add Anthropic key</button></div>'
+      + '<div class="aiHint">Add your Anthropic API key in ⚙ settings to unlock an AI summary of today\'s news and a chat box to ask about it. Your key stays in this browser.</div></div>';
+  }
+  const has = newsSummary && newsSummary.text;
+  const meta = has ? '<span class="aiMeta">' + esc(newsRelTime(newsSummary.at)) + '</span>' : '';
+  const btn = '<button type="button" class="aiBtn" data-act="genNewsSummary"' + (ui.summaryBusy ? ' disabled' : '') + '>' + (ui.summaryBusy ? 'writing…' : has ? '↻ regenerate' : 'Generate brief') + '</button>';
+  return '<div class="aiCard"><div class="aiHead"><span class="aiTitle">AI daily brief</span><div style="display:flex;align-items:center;gap:12px">' + meta + btn + '</div></div>'
+    + (has ? '<div class="aiBody">' + fmtAiText(newsSummary.text) + '</div>' : '<div class="aiHint">' + (ui.summaryBusy ? 'Reading the headlines…' : 'Generate a one-glance summary of today\'s news across your holdings.') + '</div>') + '</div>';
+}
+function aiChatHtml() {
+  if (!settings.anthropicKey) return '';
+  const msgs = ui.newsChat.length
+    ? '<div class="chatMsgs">' + ui.newsChat.map(m => '<div class="chatMsg ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + fmtAiText(m.content) + '</div>').join('')
+      + (ui.chatBusy ? '<div class="chatMsg assistant">…</div>' : '') + '</div>'
+    : '';
+  return '<div class="aiCard newsChatBox"><div class="aiHead"><span class="aiTitle">Ask about the news</span></div>' + msgs
+    + '<div class="chatRow"><input class="chatInput" type="text" placeholder="e.g. Any risks to Rheinmetall? What\'s driving gold?" value="' + esc(ui.drafts.newsChat.q) + '" data-draft="newsChat.q" data-enter="sendNewsChat"' + (ui.chatBusy ? ' disabled' : '') + ' />'
+    + '<button type="button" class="chatSend" data-act="sendNewsChat"' + (ui.chatBusy ? ' disabled' : '') + '>Ask</button></div></div>';
+}
+
 function newsViewHtml() {
   const head = '<section class="section"><div class="sectionEyebrow"><span>Stock news</span></div>';
   const syms = uniqueNewsSymbols();
   if (!syms.length) {
     return head + '<div class="newsEmpty">Add a stock holding and its news will be tracked here.</div></section>';
   }
+  const aiBlock = aiSummaryHtml() + aiChatHtml();
   const legend = syms.map(s => {
     const c = newsColorFor(s), e = newsCache[s];
     const name = e && e.name ? e.name : s, count = e && e.items ? e.items.length : 0;
@@ -1946,6 +2046,7 @@ function newsViewHtml() {
   const lastFetched = Math.max.apply(null, syms.map(s => (newsCache[s] && newsCache[s].fetchedAt) || 0));
   const updatedStr = lastFetched ? 'Updated ' + newsRelTime(lastFetched) : 'Not loaded yet';
   return head
+    + aiBlock
     + '<div class="newsLegend">' + legend + '</div>'
     + '<div class="newsBar"><span class="newsUpdated">' + esc(updatedStr) + '</span>' + refreshBtn + '</div>'
     + body + '</section>';
@@ -2038,7 +2139,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'Enter' && t.dataset && t.dataset.enter) {
     e.preventDefault();
-    const container = t.closest('.addCard, .accountCard');
+    const container = t.closest('.addCard, .accountCard, .newsChatBox');
     const submit = container && container.querySelector('[data-act="' + t.dataset.enter + '"]');
     if (submit) submit.click();
   }
@@ -2117,6 +2218,8 @@ document.addEventListener('click', e => {
     case 'loadInvHistory': loadInvestmentsHistory(); break;
     case 'refreshNews': loadStockNews(true); break;
     case 'newsFilter': ui.newsFilter = (ui.newsFilter === btn.dataset.sym) ? null : btn.dataset.sym; render(); break;
+    case 'genNewsSummary': generateNewsSummary(); break;
+    case 'sendNewsChat': sendNewsChat(); break;
     case 'showAdd': ui.show[btn.dataset.show] = true; render(); break;
     case 'refreshPrices': refreshStockPrices(); break;
     case 'openSettings': openSettings(); break;
