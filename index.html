@@ -161,6 +161,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-ui), -ap
 .cardTop { display:flex; align-items:center; gap: var(--space-3); }
 .cardStat { display:flex; flex-direction:column; gap: 2px; margin-top: auto; }
 .cardStatValue { font-family: var(--font-display); font-weight: 600; font-size: var(--text-xl); letter-spacing: -0.02em; color: var(--fg); font-variant-numeric: tabular-nums; }
+.nwValue { cursor: pointer; transition: filter 180ms var(--ease, ease); }
+.nwValue.nwBlur { filter: blur(9px); user-select: none; }
 .cardStatLabel { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 
 /* Vitals tile */
@@ -443,6 +445,7 @@ function lsGet(key){ try { const r = localStorage.getItem(key); return r ? JSON.
 function fmtNum(n){ return Math.round(n).toLocaleString('en-US'); }
 // Finance stores amounts in CHF internally but persists the user's chosen
 // display currency + FX rates; mirror that here so the dashboard matches.
+let nwRevealed = false;   // net worth starts blurred each session; tap to reveal
 function financeNetWorth(){
   const s = lsGet('finance_standalone_v1');
   if (!(s && Array.isArray(s.accounts) && s.accounts.length)) return null;
@@ -464,8 +467,11 @@ function statFor(file){
 }
 function cardHtml(a){
   const st = statFor(a.file);
+  const isNw = a.file === 'finance.html' && !!st;   // net worth → blur until tapped
+  const valCls = 'cardStatValue' + (isNw ? ' nwValue' + (nwRevealed ? '' : ' nwBlur') : '');
+  const valExtra = isNw ? ' data-nw="1" title="' + (nwRevealed ? 'Tap to hide net worth' : 'Tap to reveal net worth') + '"' : '';
   const tail = st
-    ? '<div class="cardStat"><span class="cardStatValue">' + esc(st.value) + '</span><span class="cardStatLabel">' + esc(st.label) + '</span></div>'
+    ? '<div class="cardStat"><span class="' + valCls + '"' + valExtra + '>' + esc(st.value) + '</span><span class="cardStatLabel">' + esc(st.label) + '</span></div>'
     : '<p class="cardTag">' + esc(a.tag) + '</p>';
   return '<a class="card' + (a.wide ? ' tileWide' : '') + '" href="' + a.file + '">'
     + '<span class="cardArrow" aria-hidden>↗</span>'
@@ -722,6 +728,15 @@ function saveProfile(){
 }
 
 document.addEventListener('click', e => {
+  // Net worth blur toggle — intercept before the card link navigates.
+  const nw = e.target.closest('[data-nw]');
+  if (nw) {
+    e.preventDefault(); e.stopPropagation();
+    nwRevealed = !nwRevealed;
+    nw.classList.toggle('nwBlur', !nwRevealed);
+    nw.setAttribute('title', nwRevealed ? 'Tap to hide net worth' : 'Tap to reveal net worth');
+    return;
+  }
   const stop = e.target.closest('[data-stop]');
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
