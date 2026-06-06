@@ -1368,6 +1368,10 @@ async function refreshStockPrices(opts) {
       const r = await fetch('/api/quote?symbol=' + encodeURIComponent(a.ticker));
       const j = await r.json();
       if (!j || !j.ok || !isFinite(Number(j.price))) { failed.push(a.ticker); return; }
+      // The proxy may resolve a corrected symbol (e.g. WPL.PL → WPL.WA). Adopt it
+      // so the ticker pill and future lookups use the symbol that actually quotes.
+      const resolved = String(j.symbol || a.ticker).toUpperCase();
+      if (resolved && resolved !== a.ticker) { if (a.name === a.ticker) a.name = resolved; a.ticker = resolved; }
       // Yahoo returns the price in the listing's native currency. Normalise
       // minor-unit quotes (London pence GBp/GBX, ZA cents, IL agorot) to the
       // major unit, then convert native → CHF (our base) via the FX feed.
