@@ -317,6 +317,7 @@ body {
 .invTip { position: absolute; top: -3px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted-strong); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 9px; opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity 120ms var(--ease); }
 .invXAxis { display:flex; justify-content:space-between; margin-top: 9px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
 .invChartFoot { display:flex; justify-content:flex-end; margin-top: 8px; }
+.invDotInline { display:inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 .invCostLine { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 5; opacity: 0.55; }
 .invCostLabel { position:absolute; right: 6px; transform: translateY(-50%); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); opacity: 0.75; pointer-events: none; }
 /* Stock news */
@@ -734,11 +735,24 @@ function loadNews() { try { return JSON.parse(localStorage.getItem(NEWS_KEY) || 
 function saveNews() { try { localStorage.setItem(NEWS_KEY, JSON.stringify(newsCache)); } catch {} }
 let newsCache = loadNews();   // { SYMBOL: { fetchedAt, name, lang, items:[{title,link,source,published}] } }
 
+/* ---- Per-holding price history (for the hover-a-stock chart highlight) ---- */
+const INV_SERIES_KEY = 'finance_inv_series_v1';
+function loadInvSeries() { try { return JSON.parse(localStorage.getItem(INV_SERIES_KEY) || 'null') || { byId: {} }; } catch { return { byId: {} }; } }
+function saveInvSeries() { try { localStorage.setItem(INV_SERIES_KEY, JSON.stringify(invByHolding)); } catch {} }
+let invByHolding = loadInvSeries();   // { byId: { accountId: [{t,v,c}] } } — local, not synced
+const STOCK_COLORS = ['#A7C0D7', '#BFA23E', '#74B49B', '#CF7A6B', '#9B8BD0', '#E0B05A', '#6FB1C9', '#C98BB0'];
+function stockColorFor(id) {
+  const ids = state.accounts.filter(a => a.type === 'stocks' && a.ticker).map(a => a.id);
+  const i = ids.indexOf(id);
+  return STOCK_COLORS[(i < 0 ? 0 : i) % STOCK_COLORS.length];
+}
+
 /* UI session state (not persisted) */
 const ui = {
   chartPeriod: 'ALL',
   invChartPeriod: 'ALL',
   invHistBusy: false,
+  invHoverId: null,  // holding whose row is hovered → chart shows just that stock
   newsBusy: false,
   newsFilter: null,  // when set, the stock-news feed shows only this ticker
   summaryBusy: false,
@@ -1098,7 +1112,14 @@ let invChartState = null;
 function investmentsChartHtml() {
   const W = 600, H = 200, PAD = 10;
   const activePeriod = CHART_PERIODS.find(p => p.key === ui.invChartPeriod) || CHART_PERIODS[CHART_PERIODS.length - 1];
-  const full = state.investmentsHistory || [];
+  // Source: the whole portfolio, or a single holding when its row is hovered.
+  const hoverAcct = ui.invHoverId ? state.accounts.find(a => a.id === ui.invHoverId) : null;
+  const hoverSeries = (hoverAcct && invByHolding.byId && invByHolding.byId[ui.invHoverId]) || null;
+  const isStock = !!(hoverAcct && hoverSeries && hoverSeries.length >= 2);
+  const full = isStock ? hoverSeries : (state.investmentsHistory || []);
+  const srcLabel = isStock ? esc(hoverAcct.ticker) : 'Investments';
+  const srcColor = isStock ? stockColorFor(ui.invHoverId) : null;
+  const labelHtml = (isStock ? '<span class="invDotInline" style="background:' + srcColor + '"></span>' : '') + '<span class="chartLabel">' + srcLabel + '</span>';
   let history;
   if (activePeriod.days == null) history = full;
   else {
@@ -1116,7 +1137,7 @@ function investmentsChartHtml() {
     const note = invHasHoldings()
       ? 'Pull your portfolio’s real price history to fill this chart — daily values for every holding, going back up to a year.'
       : 'Add a stock holding to track your investments over time.';
-    return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft"><span class="chartLabel">Investments</span>'
+    return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft">' + labelHtml
       + '<span class="invReadVal" id="invReadVal">' + valStr + '</span></div>' + periodToggle + '</div>'
       + '<div class="chartEmpty">' + note + '</div>'
       + '<div class="invChartFoot">' + invHistBtnHtml('↻ Load price history') + '</div></div>';
@@ -1131,7 +1152,7 @@ function investmentsChartHtml() {
   const lastC = costs[n - 1], haveCost = costs.some(c => c > 0);
   const baseLast = haveCost ? lastC : history[0].v;   // headline baseline
   const change = last - baseLast;
-  const dir = invDirOf(change), color = dir === 'up' ? 'var(--pos)' : dir === 'down' ? 'var(--neg)' : 'var(--muted)';
+  const dir = invDirOf(change), color = srcColor || (dir === 'up' ? 'var(--pos)' : dir === 'down' ? 'var(--neg)' : 'var(--muted)');
   // Domain covers both the value line and the invested line.
   const allY = haveCost ? vals.concat(costs) : vals.concat([baseLast]);
   const domMin = Math.min.apply(null, allY), domMax = Math.max.apply(null, allY);
@@ -1153,7 +1174,7 @@ function investmentsChartHtml() {
   const axisIdx = n <= 4 ? history.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1];
   const axis = axisIdx.map(i => '<span>' + esc(fmtChartDate(ts[i])) + '</span>').join('');
 
-  return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft"><span class="chartLabel">Investments</span>'
+  return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft">' + labelHtml
     + '<span class="invReadVal" id="invReadVal">' + esc(fmt(last)) + '</span>'
     + '<span class="invReadDelta ' + dir + '" id="invReadDelta" title="' + (haveCost ? 'Gain/loss vs the amount invested by this date' : 'Change over the selected period') + '">' + esc(invDeltaStr(baseLast, last)) + '</span></div>' + periodToggle + '</div>'
     + '<div class="invChartStage" data-invchart>'
@@ -1206,7 +1227,7 @@ async function loadInvestmentsHistory() {
       const ownedFrom = (pd && pd > firstDay) ? pd : firstDay;
       const costChf = (isFinite(Number(a.costEntered)) && Number(a.costEntered) > 0)
         ? displayToChf(Number(a.costEntered), a.costCcy || state.currency, rates) * shares : 0;
-      return { map: map, firstDay: firstDay, ownedFrom: ownedFrom, costChf: costChf };
+      return { map: map, firstDay: firstDay, ownedFrom: ownedFrom, costChf: costChf, id: a.id, ticker: a.ticker };
     } catch (e) { failed.push(a.ticker); return null; }
   }));
   const valid = series.filter(Boolean);
@@ -1219,18 +1240,24 @@ async function loadInvestmentsHistory() {
   const days = Array.from(daySet).sort();
   const lastClose = valid.map(() => null);
   const combined = [];
+  const byId = {}; valid.forEach(s => { byId[s.id] = []; });   // per-holding series for the hover highlight
   days.forEach(d => {
     valid.forEach((s, i) => { if (s.map.has(d)) lastClose[i] = s.map.get(d); });
     if (d < start) return;
     let v = 0, c = 0, owned = false;
+    const t = Date.parse(d + 'T12:00:00');
     for (let i = 0; i < valid.length; i++) {
       const s = valid[i];
-      if (d >= s.ownedFrom && lastClose[i] != null) { v += lastClose[i]; c += s.costChf; owned = true; }
+      if (d >= s.ownedFrom && lastClose[i] != null) {
+        v += lastClose[i]; c += s.costChf; owned = true;
+        byId[s.id].push({ t: t, v: lastClose[i], c: s.costChf });
+      }
     }
-    if (owned) combined.push({ t: Date.parse(d + 'T12:00:00'), v: v, c: c });
+    if (owned) combined.push({ t: t, v: v, c: c });
   });
   if (!combined.length) { render(); alert('Not enough overlapping history to build the chart.'); return; }
   state.investmentsHistory = combined;
+  invByHolding = { byId: byId }; saveInvSeries();   // per-holding series for hover highlight
   maybeSnapshotNw();   // tack on today's live value if it differs
   save(); render();
   if (failed.length) alert('Loaded history for ' + valid.length + ' holding(s). Could not include: ' + failed.join(', ') + '.');
@@ -1315,7 +1342,7 @@ function gainBadgeHtml(acct) {
 function holdingRowHtml(acct) {
   const g = holdingGain(acct);
   const amt = g.hasPrice ? esc(fmt(acct.amountCHF)) + gainBadgeHtml(acct) : '<span class="holdingNoPrice">—</span>';
-  return '<button type="button" class="holdingRow" data-act="openHolding" data-id="' + acct.id + '" title="View details">'
+  return '<button type="button" class="holdingRow" data-act="openHolding" data-id="' + acct.id + '" data-invhover="' + acct.id + '" title="View details · hover to highlight on the chart">'
     + '<span class="tickerPill">' + esc(acct.ticker) + '</span>'
     + '<span class="holdingShares">' + (acct.shares || 0) + ' sh</span>'
     + '<span class="accountRowAmount">' + amt + '</span>'
@@ -1422,7 +1449,7 @@ function netWorthViewHtml() {
     + (isFirstRun ? '<div class="firstRunHint">Import a statement screenshot, or add an account manually below to start tracking.</div>' : '')
     + '</div><button type="button" class="importTrigger ' + (isFirstRun ? 'importTriggerLarge' : '') + '" data-act="import" data-kind="statement"><span class="importTriggerIcon" aria-hidden>↗</span><span class="importTriggerText"><span class="importTriggerTitle">Import from screenshot</span><span class="importTriggerSub">' + (isFirstRun ? 'fastest way to get started' : 'read a statement in 5 seconds') + '</span></span></button></div>'
     + '<div class="overviewGrid">' + chartHtml() + donutHtml(netWorth) + '</div>'
-    + investmentsChartHtml()
+    + '<div id="invChartHost">' + investmentsChartHtml() + '</div>'
     + '<div class="accountsGrid">' + cards + '</div>'
     + activityHtml() + '</section>';
 }
@@ -2213,6 +2240,15 @@ document.addEventListener('pointermove', e => {
   } else if (invHoverActive) { invResetReadout(); invHoverActive = false; }
 });
 document.addEventListener('pointerleave', () => { if (invHoverActive) { invResetReadout(); invHoverActive = false; } });
+
+// Hover a holding row → redraw just the investments chart for that one stock.
+function refreshInvChart() { const host = document.getElementById('invChartHost'); if (host) host.innerHTML = investmentsChartHtml(); }
+document.addEventListener('pointermove', e => {
+  if (state.activeTab !== 'net') return;
+  const row = e.target.closest('[data-invhover]');
+  const id = row ? row.getAttribute('data-invhover') : null;
+  if (id !== ui.invHoverId) { ui.invHoverId = id; refreshInvChart(); }
+});
 
 function commitEdit(t) {
   const id = t.dataset.id, field = t.dataset.edit;
