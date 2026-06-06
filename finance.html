@@ -359,23 +359,44 @@ body {
 .addToggle:hover { color: var(--brand); border-color: var(--brand-line); background: var(--brand-soft); border-style: solid; }
 
 /* Holdings */
-.holdingRow { display:grid; grid-template-columns: auto 64px 1fr auto auto; align-items:center; gap: var(--space-3); padding: 8px 10px; border-radius: var(--radius-md); transition: background var(--duration) var(--ease-premium); }
+.holdingRow { width:100%; display:grid; grid-template-columns: auto 1fr auto auto; align-items:center; gap: var(--space-3); padding: 9px 8px 9px 10px; border-radius: var(--radius-md); transition: background var(--duration) var(--ease-premium); background: transparent; border: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; }
 .holdingRow:hover { background: var(--surface-2); }
 .tickerPill { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--brand); background: var(--brand-soft); border: 1px solid var(--brand-line); padding: 3px 8px; border-radius: var(--radius-pill); text-transform: uppercase; }
-.holdingShares { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted-strong); cursor: pointer; border-radius: 6px; padding: 2px 5px; text-align:right; }
-.holdingShares:hover { background: var(--brand-soft); }
-.holdingSharesInput { width: 64px; text-align:right; }
-.holdingPriceCol { display:flex; flex-direction:column; align-items:flex-start; gap: 2px; }
-.holdingPrice { display:inline-flex; align-items:baseline; gap: 6px; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
-.holdingPriceNative { color: var(--muted); opacity: 0.7; font-size: 11px; }
-.holdingCost { font-family: var(--font-mono); font-size: 10px; color: var(--muted); opacity: 0.85; cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; }
-.holdingCost:hover { background: var(--brand-soft); color: var(--brand); opacity: 1; }
-.holdingCostEdit { display:inline-flex; align-items:center; gap: 4px; }
-.holdingCostInput { width: 62px; }
-.holdingCostCcy { appearance:auto; font-family: var(--font-mono); font-size: 10px; color: var(--fg); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 3px; cursor: pointer; }
+.holdingShares { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.holdingNoPrice { color: var(--muted); }
+.holdingChevron { font-size: 18px; line-height: 1; color: var(--muted); opacity: 0.6; transition: transform var(--duration) var(--ease-premium), color var(--duration) var(--ease-premium); }
+.holdingRow:hover .holdingChevron { color: var(--brand); transform: translateX(2px); }
 .gainPct { font-family: var(--font-mono); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 1px 5px; border-radius: var(--radius-pill); margin-left: 6px; }
 .gainPct.up { background: var(--pos-soft); color: var(--pos); }
 .gainPct.down { background: var(--neg-soft); color: var(--neg); }
+/* Holding detail pop-up */
+.hmPanel { width: min(440px, 100%); }
+.hmHead { display:flex; align-items:center; gap: var(--space-3); }
+.hmTicker { font-size: 13px; padding: 4px 11px; }
+.hmExch { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.hmValueRow { display:flex; align-items:baseline; gap: var(--space-3); flex-wrap: wrap; margin: 4px 0 var(--space-5); }
+.hmValue { font-family: var(--font-display); font-weight: 600; font-size: 2rem; letter-spacing: -0.03em; color: var(--fg); font-variant-numeric: tabular-nums; }
+.hmGain { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.hmGain.up { color: var(--pos); } .hmGain.down { color: var(--neg); } .hmGain.dim { color: var(--muted); opacity: 0.8; }
+.hmRows { display:flex; flex-direction:column; }
+.hmRow { display:flex; align-items:center; justify-content:space-between; gap: var(--space-4); padding: 11px 0; border-top: 1px solid var(--border); }
+.hmRow:first-child { border-top: 0; }
+.hmLabel { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); flex-shrink: 0; }
+.hmVal { text-align: right; }
+.hmMono { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--fg); }
+.hmDim { color: var(--muted); }
+.hmMuted { font-size: 12px; color: var(--muted); }
+.hmInput { font-family: var(--font-mono); font-size: 13px; color: var(--fg); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 9px; text-align: right; width: 150px; max-width: 52vw; }
+.hmInput:focus { outline: none; border-color: var(--brand-line); }
+.hmInputSm { width: 92px; }
+.hmCostEdit { display:inline-flex; align-items:center; gap: 6px; }
+.hmSelect { font-family: var(--font-mono); font-size: 12px; color: var(--fg); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 4px; cursor: pointer; }
+.hmActions { display:flex; gap: var(--space-3); margin-top: var(--space-6); }
+.hmBtn { flex: 1; padding: 11px 14px; border-radius: var(--radius-md); font-family: var(--font-ui); font-size: 13px; font-weight: 600; cursor: pointer; background: var(--surface-2); border: 1px solid var(--border); color: var(--fg); transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease), color var(--duration) var(--ease); }
+.hmBtn:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface); }
+.hmBtn:disabled { opacity: 0.5; cursor: default; }
+.hmBtnDanger { color: var(--neg); }
+.hmBtnDanger:hover { background: var(--neg-soft); border-color: var(--neg-line); }
 .holdingsFooter { display:flex; justify-content:space-between; align-items:center; gap: var(--space-3); padding: 6px 2px 0; }
 .linkAction { background: transparent; border:0; padding: 4px 0; color: var(--muted-strong); font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.01em; cursor: pointer; transition: color var(--duration) var(--ease-premium); }
 .linkAction:hover { color: var(--brand); }
@@ -656,6 +677,7 @@ let settings = loadSettings();
 const ui = {
   chartPeriod: 'ALL',
   invChartPeriod: 'ALL',
+  holdingId: null,   // id of the holding whose detail pop-up is open
   show: {},          // bankAdd, cryptoAdd, otherAdd, stocksAdd, stocksManual
   edit: null,        // { id, field:'name'|'amt'|'shares' }
   subEditId: null,
@@ -740,6 +762,13 @@ const actions = {
     const a = state.accounts.find(x => x.id === id); if (!a || a.type !== 'stocks' || !a.ticker) return;
     if (!isFinite(displayAmount) || displayAmount <= 0) { delete a.costEntered; delete a.costCcy; }
     else { a.costEntered = displayAmount; a.costCcy = (ccy && CURRENCIES.indexOf(ccy) >= 0) ? ccy : state.currency; }
+    save(); render();
+  },
+  // Purchase date, stored as a 'YYYY-MM-DD' string (empty clears it).
+  setHoldingDate(id, dateStr) {
+    const a = state.accounts.find(x => x.id === id); if (!a || a.type !== 'stocks' || !a.ticker) return;
+    const s = String(dateStr || '').trim();
+    if (!s) delete a.purchaseDate; else a.purchaseDate = s;
     save(); render();
   },
 
@@ -1106,54 +1135,72 @@ function accountCardHtml(cat, netWorth) {
     + '<div class="accountList">' + items.map(accountRowHtml).join('') + '</div>' + addBlock + '</div>';
 }
 
-function holdingRowHtml(acct) {
-  const editing = ui.edit && ui.edit.id === acct.id && ui.edit.field === 'shares';
-  const sharesCell = editing
-    ? '<input class="inlineEditInput holdingSharesInput" id="edit-shares-' + acct.id + '" type="number" step="0.0001" value="' + esc(String(acct.shares || 0)) + '" data-edit="shares" data-id="' + acct.id + '" />'
-    : '<span class="holdingShares" data-act="editShares" data-id="' + acct.id + '" title="Tap to edit share count">' + (acct.shares || 0) + ' sh</span>';
+// Shared gain/loss math for a holding (cost basis vs live price, in CHF).
+function holdingGain(acct) {
   const hasPrice = typeof acct.lastPriceChf === 'number' && isFinite(acct.lastPriceChf);
-  // Show the native quote (e.g. GBP 245.10) alongside the converted base value,
-  // unless the listing already trades in the user's display currency.
-  const nativeStr = (hasPrice && acct.lastCurrency && acct.lastPrice != null && acct.lastCurrency !== state.currency)
-    ? acct.lastCurrency + ' ' + Number(acct.lastPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })
-    : '';
-  const priceLine = hasPrice
-    ? '<span class="holdingPrice" title="Live price' + (acct.lastPriceAt ? ' · ' + new Date(acct.lastPriceAt).toLocaleString() : '') + '">'
-      + (nativeStr ? '<span class="holdingPriceNative">' + esc(nativeStr) + '</span>' : '')
-      + esc(fmt(acct.lastPriceChf)) + '</span>'
-    : '<span class="holdingPrice" title="Tap ↻ refresh prices for a live quote">—</span>';
-  // Cost-basis editor: shows what you paid per share (in the currency you typed),
-  // tappable to set/edit. When unset, a faint "+ avg cost" prompt.
-  const editingCost = ui.edit && ui.edit.id === acct.id && ui.edit.field === 'cost';
   const hasCost = isFinite(Number(acct.costEntered)) && Number(acct.costEntered) > 0;
-  const costCcy = acct.costCcy || state.currency;
-  const ccyOptions = CURRENCIES.map(c => '<option value="' + c + '"' + (c === costCcy ? ' selected' : '') + '>' + c + '</option>').join('');
-  const costCell = editingCost
-    ? '<span class="holdingCostEdit">'
-      + '<input class="inlineEditInput holdingCostInput" id="edit-cost-' + acct.id + '" type="number" step="0.0001" placeholder="cost / share" value="' + (hasCost ? esc(String(acct.costEntered)) : '') + '" data-edit="cost" data-id="' + acct.id + '" />'
-      + '<select class="holdingCostCcy" id="edit-cost-ccy-' + acct.id + '" data-edit="cost" data-id="' + acct.id + '" title="Currency you paid in">' + ccyOptions + '</select>'
-      + '</span>'
-    : (hasCost
-        ? '<span class="holdingCost" data-act="editCost" data-id="' + acct.id + '" title="Average purchase price per share · tap to edit">@ ' + esc((acct.costCcy || state.currency) + ' ' + Number(acct.costEntered).toLocaleString('en-US', { maximumFractionDigits: 2 })) + '</span>'
-        : '<span class="holdingCost" data-act="editCost" data-id="' + acct.id + '" title="Set your average purchase price to track gain/loss">+ avg cost</span>');
-  const priceCell = '<div class="holdingPriceCol">' + priceLine + costCell + '</div>';
-  // Gain/loss % from cost basis vs live price (both normalised to CHF, so it's
-  // the true price move regardless of display currency).
   const costChf = hasCost ? displayToChf(Number(acct.costEntered), acct.costCcy || state.currency, rates) : null;
-  let gainBadge = '';
+  let pct = null, plChf = null;
   if (hasPrice && costChf && costChf > 0) {
-    const pct = (acct.lastPriceChf / costChf - 1) * 100;
-    const plChf = (acct.lastPriceChf - costChf) * (Number(acct.shares) || 0);
-    const dir = pct >= 0 ? 'up' : 'down';
-    const arrow = pct >= 0 ? '▲' : '▼';
-    gainBadge = '<span class="gainPct ' + dir + '" title="' + esc((pct >= 0 ? '+' : '') + fmt(plChf) + ' vs cost') + '">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
+    pct = (acct.lastPriceChf / costChf - 1) * 100;
+    plChf = (acct.lastPriceChf - costChf) * (Number(acct.shares) || 0);
   }
-  const amtCell = hasPrice
-    ? '<span class="accountRowAmount" title="shares × live price">' + esc(fmt(acct.amountCHF)) + gainBadge + '</span>'
-    : '<span class="accountRowAmount" title="Tap ↻ refresh prices for a live quote">—</span>';
-  return '<div class="holdingRow"><span class="tickerPill">' + esc(acct.ticker) + '</span>' + sharesCell
-    + priceCell + amtCell
-    + '<button type="button" class="deleteBtn" data-act="delAccount" data-id="' + acct.id + '" title="Delete">×</button></div>';
+  return { hasPrice: hasPrice, hasCost: hasCost, costChf: costChf, pct: pct, plChf: plChf };
+}
+function gainBadgeHtml(acct) {
+  const g = holdingGain(acct);
+  if (g.pct == null) return '';
+  const dir = g.pct >= 0 ? 'up' : 'down', arrow = g.pct >= 0 ? '▲' : '▼';
+  return '<span class="gainPct ' + dir + '" title="' + esc((g.pct >= 0 ? '+' : '') + fmt(g.plChf) + ' vs cost') + '">' + arrow + ' ' + Math.abs(g.pct).toFixed(1) + '%</span>';
+}
+// Slim row — tap to open the detail pop-up. Full info lives in the modal.
+function holdingRowHtml(acct) {
+  const g = holdingGain(acct);
+  const amt = g.hasPrice ? esc(fmt(acct.amountCHF)) + gainBadgeHtml(acct) : '<span class="holdingNoPrice">—</span>';
+  return '<button type="button" class="holdingRow" data-act="openHolding" data-id="' + acct.id + '" title="View details">'
+    + '<span class="tickerPill">' + esc(acct.ticker) + '</span>'
+    + '<span class="holdingShares">' + (acct.shares || 0) + ' sh</span>'
+    + '<span class="accountRowAmount">' + amt + '</span>'
+    + '<span class="holdingChevron" aria-hidden>›</span></button>';
+}
+
+/* ---- Holding detail pop-up ---- */
+function openHolding(id) { ui.holdingId = id; renderModal(); }
+function holdingModalHtml(id) {
+  const a = state.accounts.find(x => x.id === id);
+  if (!a) { ui.holdingId = null; return ''; }
+  const g = holdingGain(a);
+  const nativeStr = (g.hasPrice && a.lastCurrency && a.lastPrice != null)
+    ? a.lastCurrency + ' ' + Number(a.lastPrice).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+  const hasCost = isFinite(Number(a.costEntered)) && Number(a.costEntered) > 0;
+  const costCcy = a.costCcy || state.currency;
+  const ccyOptions = CURRENCIES.map(c => '<option value="' + c + '"' + (c === costCcy ? ' selected' : '') + '>' + c + '</option>').join('');
+  const totalCost = (g.costChf != null) ? g.costChf * (Number(a.shares) || 0) : null;
+  const priceStr = g.hasPrice ? (nativeStr ? esc(nativeStr) + '<span class="hmDim">  ·  ' + esc(fmt(a.lastPriceChf)) + '</span>' : esc(fmt(a.lastPriceChf))) : '—';
+  const updated = a.lastPriceAt ? new Date(a.lastPriceAt).toLocaleString() : 'never — tap refresh';
+  const valStr = g.hasPrice ? fmt(a.amountCHF) : '—';
+  let gainRow = '<span class="hmGain dim">Add an average cost to see gain/loss</span>';
+  if (g.pct != null) {
+    const dir = g.pct >= 0 ? 'up' : 'down', arrow = g.pct >= 0 ? '▲' : '▼';
+    gainRow = '<span class="hmGain ' + dir + '">' + arrow + ' ' + (g.plChf >= 0 ? '+' : '−') + esc(fmt(Math.abs(g.plChf))) + ' · ' + (g.pct >= 0 ? '+' : '−') + Math.abs(g.pct).toFixed(2) + '%</span>';
+  }
+  function row(label, inner) { return '<div class="hmRow"><span class="hmLabel">' + esc(label) + '</span><span class="hmVal">' + inner + '</span></div>'; }
+  return '<div class="importOverlay" data-act="closeHolding"><div class="importPanel hmPanel" data-stop="1">'
+    + '<div class="importHead"><div class="hmHead"><span class="tickerPill hmTicker">' + esc(a.ticker) + '</span>'
+    + (a.lastCurrency ? '<span class="hmExch">' + esc(a.lastCurrency) + (a.lastExchange ? ' · ' + esc(a.lastExchange) : '') + '</span>' : '')
+    + '</div><button type="button" class="importClose" data-act="closeHolding">×</button></div>'
+    + '<div class="hmValueRow"><span class="hmValue">' + esc(valStr) + '</span>' + gainRow + '</div>'
+    + '<div class="hmRows">'
+    + row('Shares', '<input class="hmInput" type="number" step="0.0001" value="' + esc(String(a.shares || 0)) + '" data-hfield="shares" data-id="' + a.id + '" />')
+    + row('Live price', '<span class="hmMono">' + priceStr + '</span>')
+    + row('Avg cost / share', '<span class="hmCostEdit"><input class="hmInput hmInputSm" type="number" step="0.0001" placeholder="—" value="' + (hasCost ? esc(String(a.costEntered)) : '') + '" id="hm-cost-' + a.id + '" data-hfield="cost" data-id="' + a.id + '" /><select class="hmSelect" id="hm-costccy-' + a.id + '" data-hfield="costccy" data-id="' + a.id + '">' + ccyOptions + '</select></span>')
+    + row('Purchase date', '<input class="hmInput" type="date" value="' + esc(a.purchaseDate || '') + '" data-hfield="date" data-id="' + a.id + '" />')
+    + row('Total invested', '<span class="hmMono">' + (totalCost != null ? esc(fmt(totalCost)) : '—') + '</span>')
+    + row('Last updated', '<span class="hmMuted">' + esc(updated) + '</span>')
+    + '</div>'
+    + '<div class="hmActions"><button type="button" class="hmBtn" data-act="refreshPrices"' + (ui.pricesBusy ? ' disabled' : '') + '>' + (ui.pricesBusy ? '↻ refreshing…' : '↻ refresh price') + '</button>'
+    + '<button type="button" class="hmBtn hmBtnDanger" data-act="delHolding" data-id="' + a.id + '">Delete holding</button></div>'
+    + '</div></div>';
 }
 function stocksCardHtml(netWorth) {
   const stockAccounts = state.accounts.filter(a => a.type === 'stocks');
@@ -1462,6 +1509,7 @@ const KIND_HINT = {
 
 function renderModal() {
   const root = document.getElementById('modalRoot');
+  if (ui.holdingId) { root.innerHTML = holdingModalHtml(ui.holdingId); return; }
   if (ui.settingsOpen) { root.innerHTML = settingsModalHtml(); return; }
   if (!ui.importOpen) { root.innerHTML = ''; return; }
   root.innerHTML = importModalHtml();
@@ -1540,7 +1588,7 @@ async function refreshStockPrices(opts) {
       const rate = rates[ccy];
       if (!rate) { noRate.push(a.ticker + ' (' + ccy + ')'); return; }
       const priceChf = price / rate;
-      a.lastPrice = price; a.lastCurrency = ccy;
+      a.lastPrice = price; a.lastCurrency = ccy; a.lastExchange = j.exchange || a.lastExchange;
       a.lastPriceChf = priceChf; a.lastPriceAt = Date.now();
       a.amountCHF = (Number(a.shares) || 0) * priceChf;
       ok++;
@@ -1752,6 +1800,19 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset && t.dataset.importfile) { const file = t.files && t.files[0]; if (file) runImport(t.dataset.importfile, file); return; }
+  // Holding detail pop-up fields commit on change.
+  if (t.dataset && t.dataset.hfield) {
+    const hid = t.dataset.id, f = t.dataset.hfield;
+    if (f === 'shares') { const v = parseFloat(t.value); if (!isNaN(v) && v >= 0) actions.setHoldingShares(hid, v); }
+    else if (f === 'date') actions.setHoldingDate(hid, t.value);
+    else if (f === 'cost' || f === 'costccy') {
+      const inp = document.getElementById('hm-cost-' + hid), sel = document.getElementById('hm-costccy-' + hid);
+      const ccy = sel ? sel.value : state.currency;
+      if (inp && String(inp.value).trim() === '') actions.setHoldingCost(hid, 0, ccy);
+      else { const amt = inp ? parseFloat(inp.value) : NaN; if (!isNaN(amt)) actions.setHoldingCost(hid, amt, ccy); }
+    }
+    return;
+  }
   if (t.dataset && t.dataset.draft) { const { obj, key } = getDraftRef(t.dataset.draft); if (obj) obj[key] = (t.type === 'checkbox') ? t.checked : t.value; }
 });
 
@@ -1858,6 +1919,9 @@ document.addEventListener('click', e => {
     case 'editShares': ui.edit = { id, field: 'shares' }; render(); break;
     case 'editCost': ui.edit = { id, field: 'cost' }; render(); break;
     case 'delAccount': actions.deleteAccount(id); break;
+    case 'openHolding': openHolding(id); break;
+    case 'closeHolding': if (!stop || e.target.closest('.importClose')) { ui.holdingId = null; renderModal(); } break;
+    case 'delHolding': ui.holdingId = null; actions.deleteAccount(id); break;
 
     case 'addAccount': {
       const cat = btn.dataset.cat; const d = ui.drafts[cat];
