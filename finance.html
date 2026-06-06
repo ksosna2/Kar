@@ -527,7 +527,7 @@ body {
 const STORAGE_KEY = 'finance_standalone_v1';
 const ACTIVITY_MAX = 50;
 const NW_HISTORY_MAX = 500;
-const CURRENCIES = ['CHF', 'USD', 'EUR', 'GBP', 'PLN'];
+const CURRENCIES = ['PLN', 'EUR', 'USD'];
 const TAB_KEYS = ['net', 'subs', 'orders', 'wish'];
 const TAB_LABELS = { net: 'net worth', subs: 'subs', orders: 'orders', wish: 'wishlist' };
 const DEFAULT_RATES = { CHF: 1, USD: 1, EUR: 1, GBP: 1, PLN: 1 };
@@ -594,11 +594,16 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replac
 /* ============================================================
  * State + persistence
  * ============================================================ */
-const DEFAULT_STATE = { version: 1, currency: 'CHF', activeTab: 'net', accounts: [], subscriptions: [], orders: [], wishlist: [], activity: [], netWorthHistory: [] };
+const DEFAULT_STATE = { version: 1, currency: 'PLN', activeTab: 'net', accounts: [], subscriptions: [], orders: [], wishlist: [], activity: [], netWorthHistory: [] };
 
 function load() {
-  try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return Object.assign({}, DEFAULT_STATE); return Object.assign({}, DEFAULT_STATE, JSON.parse(raw)); }
-  catch { return Object.assign({}, DEFAULT_STATE); }
+  let s;
+  try { const raw = localStorage.getItem(STORAGE_KEY); s = raw ? Object.assign({}, DEFAULT_STATE, JSON.parse(raw)) : Object.assign({}, DEFAULT_STATE); }
+  catch { s = Object.assign({}, DEFAULT_STATE); }
+  // Display currency must be one we still offer (CHF/GBP were retired) — fall
+  // back to PLN. Amounts are unaffected: they're stored in CHF internally.
+  if (CURRENCIES.indexOf(s.currency) < 0) s.currency = 'PLN';
+  return s;
 }
 function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {} }
 
@@ -1763,8 +1768,13 @@ fetch('https://open.er-api.com/v6/latest/CHF')
   .then(data => {
     if (data && data.rates) {
       // Keep the full rate map (CHF base) so any listing currency — JPY, CAD,
-      // SEK, HKD, … — can be converted, not just the four display currencies.
+      // SEK, HKD, … — can be converted, not just the display currencies.
       rates = Object.assign({ CHF: 1 }, data.rates);
+      // Persist the display-currency rates so the dashboard (index.html) can
+      // show net worth in the same currency without its own FX fetch.
+      state.fxRates = { CHF: 1 };
+      CURRENCIES.forEach(c => { state.fxRates[c] = rates[c] || 1; });
+      save();
       render();
       // Now that the FX feed is in, price any live holdings (no key needed).
       if (state.accounts.some(a => a.type === 'stocks' && a.ticker)) refreshStockPrices({ silent: true });
