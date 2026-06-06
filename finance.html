@@ -304,6 +304,18 @@ body {
 .chartStat { display:flex; flex-direction:column; gap: 3px; }
 .chartStatLabel { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .chartStatVal { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg); }
+/* Investments chart (interactive) */
+.invChartWrap { position: relative; padding: var(--space-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--card-shadow); margin-bottom: var(--space-4); }
+.invChartHeadRow { display:flex; justify-content:space-between; align-items:baseline; gap: var(--space-3); margin-bottom: var(--space-4); flex-wrap: wrap; }
+.invReadVal { font-family: var(--font-display); font-weight: 600; font-size: 1.3rem; letter-spacing: -0.02em; color: var(--fg); font-variant-numeric: tabular-nums; margin-left: var(--space-3); }
+.invReadDelta { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-left: 8px; color: var(--muted); }
+.invReadDelta.up { color: var(--pos); } .invReadDelta.down { color: var(--neg); }
+.invChartStage { position: relative; width: 100%; height: 200px; cursor: crosshair; touch-action: none; }
+.invChartSvg { width: 100%; height: 100%; display: block; }
+.invCrosshair { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border-strong); opacity: 0; pointer-events: none; transition: opacity 120ms var(--ease); }
+.invDot { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: var(--brand); border: 2px solid var(--bg-elevated); box-shadow: 0 0 0 1px var(--brand-line), 0 0 10px var(--brand-glow); transform: translate(-50%,-50%); opacity: 0; pointer-events: none; transition: opacity 120ms var(--ease); }
+.invTip { position: absolute; top: -3px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted-strong); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 9px; opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity 120ms var(--ease); }
+.invXAxis { display:flex; justify-content:space-between; margin-top: 9px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
 
 /* Donut */
 .donutStage { position: relative; display:flex; align-items:center; justify-content:center; margin: var(--space-3) 0; }
@@ -564,6 +576,7 @@ function chfToDisplay(amountCHF, currency, rates) { return amountCHF * (rates[cu
 function monthlyEquivalent(s) { const a = Number(s.amountCHF) || 0; if (s.period === 'yearly') return a / 12; if (s.period === 'weekly') return a * 4.345; return a; }
 function netWorthChf(accounts) { return accounts.reduce((sum, a) => sum + (Number(a.amountCHF) || 0), 0); }
 function netWorthByType(accounts) { const out = { bank: 0, stocks: 0, crypto: 0, other: 0 }; accounts.forEach(a => { out[a.type] = (out[a.type] || 0) + (Number(a.amountCHF) || 0); }); return out; }
+function investmentsChf(accounts) { return accounts.reduce((s, a) => s + (a.type === 'stocks' ? (Number(a.amountCHF) || 0) : 0), 0); }
 
 function nextRenewalDate(iso, period) {
   if (!iso) return null;
@@ -613,7 +626,7 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replac
 /* ============================================================
  * State + persistence
  * ============================================================ */
-const DEFAULT_STATE = { version: 1, currency: 'PLN', activeTab: 'net', accounts: [], subscriptions: [], orders: [], wishlist: [], activity: [], netWorthHistory: [] };
+const DEFAULT_STATE = { version: 1, currency: 'PLN', activeTab: 'net', accounts: [], subscriptions: [], orders: [], wishlist: [], activity: [], netWorthHistory: [], investmentsHistory: [] };
 
 function load() {
   let s;
@@ -642,6 +655,7 @@ let settings = loadSettings();
 /* UI session state (not persisted) */
 const ui = {
   chartPeriod: 'ALL',
+  invChartPeriod: 'ALL',
   show: {},          // bankAdd, cryptoAdd, otherAdd, stocksAdd, stocksManual
   edit: null,        // { id, field:'name'|'amt'|'shares' }
   subEditId: null,
@@ -666,9 +680,18 @@ function maybeSnapshotNw() {
   const total = netWorthChf(state.accounts);
   const h = state.netWorthHistory;
   const last = h[h.length - 1];
-  if (last && Math.abs((last.v || 0) - total) < 0.005) return;
-  h.push({ t: Date.now(), v: total });
-  if (h.length > NW_HISTORY_MAX) h.splice(0, h.length - NW_HISTORY_MAX);
+  if (!(last && Math.abs((last.v || 0) - total) < 0.005)) {
+    h.push({ t: Date.now(), v: total });
+    if (h.length > NW_HISTORY_MAX) h.splice(0, h.length - NW_HISTORY_MAX);
+  }
+  // Parallel series for the investments-only chart (stocks total).
+  const inv = investmentsChf(state.accounts);
+  const ih = state.investmentsHistory || (state.investmentsHistory = []);
+  const li = ih[ih.length - 1];
+  if (!(li && Math.abs((li.v || 0) - inv) < 0.005)) {
+    ih.push({ t: Date.now(), v: inv });
+    if (ih.length > NW_HISTORY_MAX) ih.splice(0, ih.length - NW_HISTORY_MAX);
+  }
 }
 function pushActivity(entry) {
   state.activity.push(Object.assign({ id: genId('act'), ts: Date.now() }, entry));
@@ -961,6 +984,71 @@ function chartHtml() {
     + statsRow(history) + '</div>';
 }
 
+/* ---- Investments chart (stocks only) + interactive hover ---- */
+const CHART_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtChartDate(t) { const d = new Date(t); return d.getDate() + ' ' + CHART_MONTHS[d.getMonth()]; }
+function invDeltaStr(first, v) {
+  const change = v - first;
+  const arrow = change > 0.005 ? '▲' : change < -0.005 ? '▼' : '·';
+  const money = (change >= 0 ? '+' : '−') + fmt(Math.abs(change));
+  let pct = '';
+  if (Math.abs(first) > 0.5) { const p = (change / Math.abs(first)) * 100, ap = Math.abs(p); pct = ' · ' + (p >= 0 ? '+' : '−') + ap.toFixed(ap >= 100 ? 0 : ap >= 10 ? 1 : 2) + '%'; }
+  return arrow + ' ' + money + pct;
+}
+function invDirOf(change) { return Math.abs(change) < 0.005 ? 'flat' : change > 0 ? 'up' : 'down'; }
+let invChartState = null;
+
+function investmentsChartHtml() {
+  const W = 600, H = 200, PAD = 10;
+  const activePeriod = CHART_PERIODS.find(p => p.key === ui.invChartPeriod) || CHART_PERIODS[CHART_PERIODS.length - 1];
+  const full = state.investmentsHistory || [];
+  let history;
+  if (activePeriod.days == null) history = full;
+  else {
+    const cutoff = Date.now() - activePeriod.days * 86400000;
+    const inWin = full.filter(p => p.t >= cutoff);
+    if (inWin.length >= 2 || full.length === 0) history = inWin;
+    else { let anchor = null; for (let i = full.length - 1; i >= 0; i--) { if (full[i].t < cutoff) { anchor = full[i]; break; } } history = anchor ? [anchor].concat(inWin) : inWin; }
+  }
+  const seg = CHART_PERIODS.map(p => '<button type="button" class="periodBtn ' + (p.key === ui.invChartPeriod ? 'periodBtnActive' : '') + '" data-act="invChartPeriod" data-p="' + p.key + '">' + p.label + '</button>').join('');
+  const periodToggle = '<div class="periodSeg">' + seg + '</div>';
+
+  if (history.length < 2) {
+    invChartState = null;
+    const valStr = history.length ? esc(fmt(history[history.length - 1].v)) : '—';
+    const note = full.length === 0
+      ? 'Add a stock holding and tap ↻ refresh prices to start tracking your portfolio over time.'
+      : 'Tracking your portfolio — the line fills in as values change. Refresh prices to add points.';
+    return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft"><span class="chartLabel">Investments</span>'
+      + '<span class="invReadVal" id="invReadVal">' + valStr + '</span></div>' + periodToggle + '</div>'
+      + '<div class="chartEmpty">' + note + '</div></div>';
+  }
+
+  const n = history.length, first = history[0].v, last = history[n - 1].v, change = last - first;
+  const dir = invDirOf(change), color = dir === 'up' ? 'var(--pos)' : dir === 'down' ? 'var(--neg)' : 'var(--muted)';
+  const vals = history.map(p => p.v), ts = history.map(p => p.t);
+  const minV = Math.min.apply(null, vals), maxV = Math.max.apply(null, vals), range = (maxV - minV) || Math.max(1, Math.abs(maxV));
+  const pts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: H - PAD - ((p.v - minV) / range) * (H - PAD * 2) }));
+  const lineD = smoothPath(pts), lp = pts[n - 1], fp = pts[0];
+  const areaD = lineD + ' L' + lp.x + ',' + H + ' L' + fp.x + ',' + H + ' Z';
+
+  invChartState = { ts: ts, vals: vals, first: first, xPct: pts.map(p => (p.x / W) * 100), yPct: pts.map(p => (p.y / H) * 100) };
+
+  const axisIdx = n <= 4 ? history.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1];
+  const axis = axisIdx.map(i => '<span>' + esc(fmtChartDate(ts[i])) + '</span>').join('');
+
+  return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft"><span class="chartLabel">Investments</span>'
+    + '<span class="invReadVal" id="invReadVal">' + esc(fmt(last)) + '</span>'
+    + '<span class="invReadDelta ' + dir + '" id="invReadDelta">' + esc(invDeltaStr(first, last)) + '</span></div>' + periodToggle + '</div>'
+    + '<div class="invChartStage" data-invchart>'
+    + '<svg class="chartSvg invChartSvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden style="color:' + color + '">'
+    + '<defs><linearGradient id="invGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.5"/><stop offset="60%" stop-color="currentColor" stop-opacity="0.16"/><stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>'
+    + '<line class="chartGrid" x1="0" x2="' + W + '" y1="50" y2="50"/><line class="chartGrid" x1="0" x2="' + W + '" y1="100" y2="100"/><line class="chartGrid" x1="0" x2="' + W + '" y1="150" y2="150"/>'
+    + '<path d="' + areaD + '" fill="url(#invGrad)"/><path d="' + lineD + '" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="chartLineStroke"/></svg>'
+    + '<div class="invCrosshair" id="invCrosshair"></div><div class="invDot" id="invDot"></div><div class="invTip" id="invTip"></div>'
+    + '</div><div class="invXAxis">' + axis + '</div></div>';
+}
+
 function donutArcPath(cx, cy, rO, rI, a1, a2) {
   const x1o = cx + rO*Math.cos(a1), y1o = cy + rO*Math.sin(a1), x2o = cx + rO*Math.cos(a2), y2o = cy + rO*Math.sin(a2);
   const x1i = cx + rI*Math.cos(a2), y1i = cy + rI*Math.sin(a2), x2i = cx + rI*Math.cos(a1), y2i = cy + rI*Math.sin(a1);
@@ -1129,6 +1217,7 @@ function netWorthViewHtml() {
     + (isFirstRun ? '<div class="firstRunHint">Import a statement screenshot, or add an account manually below to start tracking.</div>' : '')
     + '</div><button type="button" class="importTrigger ' + (isFirstRun ? 'importTriggerLarge' : '') + '" data-act="import" data-kind="statement"><span class="importTriggerIcon" aria-hidden>↗</span><span class="importTriggerText"><span class="importTriggerTitle">Import from screenshot</span><span class="importTriggerSub">' + (isFirstRun ? 'fastest way to get started' : 'read a statement in 5 seconds') + '</span></span></button></div>'
     + '<div class="overviewGrid">' + chartHtml() + donutHtml(netWorth) + '</div>'
+    + investmentsChartHtml()
     + '<div class="accountsGrid">' + cards + '</div>'
     + activityHtml() + '</section>';
 }
@@ -1691,6 +1780,38 @@ document.addEventListener('blur', e => {
   }
 }, true);
 
+/* ---- Investments chart hover: read value + gain/loss at the cursor ---- */
+let invHoverActive = false;
+function invSetReadout(idx) {
+  const st = invChartState; if (!st) return;
+  const v = st.vals[idx], change = v - st.first;
+  const valEl = document.getElementById('invReadVal'); if (valEl) valEl.textContent = fmt(v);
+  const dEl = document.getElementById('invReadDelta'); if (dEl) { dEl.textContent = invDeltaStr(st.first, v); dEl.className = 'invReadDelta ' + invDirOf(change); }
+}
+function invShowMarker(idx, show) {
+  const st = invChartState; if (!st) return;
+  const cross = document.getElementById('invCrosshair'), dot = document.getElementById('invDot'), tip = document.getElementById('invTip');
+  const op = show ? '1' : '0';
+  if (cross) { cross.style.left = st.xPct[idx] + '%'; cross.style.opacity = op; }
+  if (dot) { dot.style.left = st.xPct[idx] + '%'; dot.style.top = st.yPct[idx] + '%'; dot.style.opacity = op; }
+  if (tip) { tip.textContent = fmtChartDate(st.ts[idx]); tip.style.left = st.xPct[idx] + '%'; tip.style.opacity = op; }
+}
+function invResetReadout() {
+  const st = invChartState; if (!st) return;
+  invSetReadout(st.vals.length - 1);
+  invShowMarker(st.vals.length - 1, false);
+}
+document.addEventListener('pointermove', e => {
+  const stage = e.target.closest('[data-invchart]');
+  if (stage && invChartState) {
+    const st = invChartState, n = st.vals.length, r = stage.getBoundingClientRect();
+    let frac = (e.clientX - r.left) / r.width; frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+    const idx = Math.round(frac * (n - 1));
+    invSetReadout(idx); invShowMarker(idx, true); invHoverActive = true;
+  } else if (invHoverActive) { invResetReadout(); invHoverActive = false; }
+});
+document.addEventListener('pointerleave', () => { if (invHoverActive) { invResetReadout(); invHoverActive = false; } });
+
 function commitEdit(t) {
   const id = t.dataset.id, field = t.dataset.edit;
   if (!ui.edit) return; // already committed
@@ -1718,6 +1839,7 @@ document.addEventListener('click', e => {
     case 'theme': applyTheme(btn.dataset.theme); break;
     case 'tab': actions.setActiveTab(btn.dataset.tab); break;
     case 'chartPeriod': ui.chartPeriod = btn.dataset.p; render(); break;
+    case 'invChartPeriod': ui.invChartPeriod = btn.dataset.p; render(); break;
     case 'showAdd': ui.show[btn.dataset.show] = true; render(); break;
     case 'refreshPrices': refreshStockPrices(); break;
     case 'openSettings': openSettings(); break;
