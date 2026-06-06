@@ -1122,33 +1122,40 @@ function investmentsChartHtml() {
       + '<div class="invChartFoot">' + invHistBtnHtml('↻ Load price history') + '</div></div>';
   }
 
-  const n = history.length, first = history[0].v, last = history[n - 1].v;
-  // Measure gain/loss against total cost basis (matches the per-holding badges).
-  // Fall back to the period's first value if no cost basis is set anywhere.
-  const totalCost = investmentsCostChf();
-  const baseline = totalCost > 0 ? totalCost : first;
-  const change = last - baseline;
-  const dir = invDirOf(change), color = dir === 'up' ? 'var(--pos)' : dir === 'down' ? 'var(--neg)' : 'var(--muted)';
+  const n = history.length, last = history[n - 1].v;
   const vals = history.map(p => p.v), ts = history.map(p => p.t);
-  // Include the baseline in the y-domain so the cost line is always on-chart.
-  const domMin = Math.min(Math.min.apply(null, vals), baseline), domMax = Math.max(Math.max.apply(null, vals), baseline);
+  // Cost invested by each date (purchase-date aware). Older snapshots without a
+  // per-point cost fall back to the current total cost basis.
+  const fallbackCost = investmentsCostChf();
+  const costs = history.map(p => (p.c != null) ? p.c : fallbackCost);
+  const lastC = costs[n - 1], haveCost = costs.some(c => c > 0);
+  const baseLast = haveCost ? lastC : history[0].v;   // headline baseline
+  const change = last - baseLast;
+  const dir = invDirOf(change), color = dir === 'up' ? 'var(--pos)' : dir === 'down' ? 'var(--neg)' : 'var(--muted)';
+  // Domain covers both the value line and the invested line.
+  const allY = haveCost ? vals.concat(costs) : vals.concat([baseLast]);
+  const domMin = Math.min.apply(null, allY), domMax = Math.max.apply(null, allY);
   const range = (domMax - domMin) || Math.max(1, Math.abs(domMax));
   const yOf = v => H - PAD - ((v - domMin) / range) * (H - PAD * 2);
-  const pts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: yOf(p.v) }));
+  const pts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: yOf(vals[i]) }));
   const lineD = smoothPath(pts), lp = pts[n - 1], fp = pts[0];
   const areaD = lineD + ' L' + lp.x + ',' + H + ' L' + fp.x + ',' + H + ' Z';
-  const yCost = yOf(baseline);
-  const costLine = totalCost > 0 ? '<line class="invCostLine" x1="0" x2="' + W + '" y1="' + yCost.toFixed(1) + '" y2="' + yCost.toFixed(1) + '"/>' : '';
-  const costLabel = totalCost > 0 ? '<div class="invCostLabel" style="top:' + ((yCost / H) * 100).toFixed(1) + '%">cost</div>' : '';
+  // The "invested" reference line (cost over time) — rises as you buy in.
+  let costLine = '', costLabel = '';
+  if (haveCost) {
+    const costPts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: yOf(costs[i]) }));
+    costLine = '<path class="invCostLine" fill="none" d="' + smoothPath(costPts) + '"/>';
+    costLabel = '<div class="invCostLabel" style="top:' + ((costPts[n - 1].y / H) * 100).toFixed(1) + '%">invested</div>';
+  }
 
-  invChartState = { ts: ts, vals: vals, first: baseline, xPct: pts.map(p => (p.x / W) * 100), yPct: pts.map(p => (p.y / H) * 100) };
+  invChartState = { ts: ts, vals: vals, costs: costs, baseLast: baseLast, xPct: pts.map(p => (p.x / W) * 100), yPct: pts.map(p => (p.y / H) * 100) };
 
   const axisIdx = n <= 4 ? history.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1];
   const axis = axisIdx.map(i => '<span>' + esc(fmtChartDate(ts[i])) + '</span>').join('');
 
   return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft"><span class="chartLabel">Investments</span>'
     + '<span class="invReadVal" id="invReadVal">' + esc(fmt(last)) + '</span>'
-    + '<span class="invReadDelta ' + dir + '" id="invReadDelta" title="' + (totalCost > 0 ? 'Gain/loss vs your cost basis' : 'Change over the selected period') + '">' + esc(invDeltaStr(baseline, last)) + '</span></div>' + periodToggle + '</div>'
+    + '<span class="invReadDelta ' + dir + '" id="invReadDelta" title="' + (haveCost ? 'Gain/loss vs the amount invested by this date' : 'Change over the selected period') + '">' + esc(invDeltaStr(baseLast, last)) + '</span></div>' + periodToggle + '</div>'
     + '<div class="invChartStage" data-invchart>'
     + '<svg class="chartSvg invChartSvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden style="color:' + color + '">'
     + '<defs><linearGradient id="invGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.5"/><stop offset="60%" stop-color="currentColor" stop-opacity="0.16"/><stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>'
@@ -1169,9 +1176,10 @@ function invHistBtnHtml(label) {
 function invDayKey(ms) { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 
 // Backfill investmentsHistory from real daily price history (Yahoo via /api/quote
-// series mode). Builds a per-day portfolio value: for each holding, native close
-// → minor-unit normalise → current FX → × shares, forward-filled and summed over
-// a common date grid (current shares assumed across the window).
+// series mode), respecting each holding's PURCHASE DATE. A holding only counts
+// toward the portfolio from the day it was bought; before that its value and its
+// cost are both zero. Each point stores { t, v (value), c (cost invested by then) }
+// so gain/loss is measured against what you'd actually put in by that date.
 async function loadInvestmentsHistory() {
   const holdings = state.accounts.filter(a => a.type === 'stocks' && a.ticker && (Number(a.shares) || 0) > 0);
   if (!holdings.length) { alert('Add a stock holding with shares first.'); return; }
@@ -1192,25 +1200,34 @@ async function loadInvestmentsHistory() {
       const shares = Number(a.shares) || 0;
       const map = new Map(); let firstDay = null;
       j.points.forEach(p => { const c = Number(p.c); if (!isFinite(c)) return; const k = invDayKey(p.t * 1000); map.set(k, (c / div) / rate * shares); if (firstDay === null || k < firstDay) firstDay = k; });
-      return map.size ? { map: map, firstDay: firstDay } : null;
+      if (!map.size) return null;
+      // Owned from the purchase date (clamped to the data we have); else assume held the whole window.
+      const pd = (a.purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(a.purchaseDate)) ? a.purchaseDate : null;
+      const ownedFrom = (pd && pd > firstDay) ? pd : firstDay;
+      const costChf = (isFinite(Number(a.costEntered)) && Number(a.costEntered) > 0)
+        ? displayToChf(Number(a.costEntered), a.costCcy || state.currency, rates) * shares : 0;
+      return { map: map, firstDay: firstDay, ownedFrom: ownedFrom, costChf: costChf };
     } catch (e) { failed.push(a.ticker); return null; }
   }));
   const valid = series.filter(Boolean);
   ui.invHistBusy = false;
   if (!valid.length) { render(); alert('Could not load price history.' + (failed.length ? '\n\nFailed: ' + failed.join(', ') : '')); return; }
-  // Start where every holding has data (latest first-day), forward-fill, sum.
-  const start = valid.reduce((mx, s) => s.firstDay > mx ? s.firstDay : mx, valid[0].firstDay);
+  // Chart starts when the first holding was owned (earliest purchase / data start).
+  const start = valid.reduce((mn, s) => s.ownedFrom < mn ? s.ownedFrom : mn, valid[0].ownedFrom);
   const daySet = new Set();
   valid.forEach(s => s.map.forEach((_, k) => daySet.add(k)));
   const days = Array.from(daySet).sort();
-  const lastVal = valid.map(() => null);
+  const lastClose = valid.map(() => null);
   const combined = [];
   days.forEach(d => {
-    valid.forEach((s, i) => { if (s.map.has(d)) lastVal[i] = s.map.get(d); });
+    valid.forEach((s, i) => { if (s.map.has(d)) lastClose[i] = s.map.get(d); });
     if (d < start) return;
-    let sum = 0, ok = true;
-    for (let i = 0; i < valid.length; i++) { if (lastVal[i] == null) { ok = false; break; } sum += lastVal[i]; }
-    if (ok) combined.push({ t: Date.parse(d + 'T12:00:00'), v: sum });
+    let v = 0, c = 0, owned = false;
+    for (let i = 0; i < valid.length; i++) {
+      const s = valid[i];
+      if (d >= s.ownedFrom && lastClose[i] != null) { v += lastClose[i]; c += s.costChf; owned = true; }
+    }
+    if (owned) combined.push({ t: Date.parse(d + 'T12:00:00'), v: v, c: c });
   });
   if (!combined.length) { render(); alert('Not enough overlapping history to build the chart.'); return; }
   state.investmentsHistory = combined;
@@ -2166,9 +2183,12 @@ document.addEventListener('blur', e => {
 let invHoverActive = false;
 function invSetReadout(idx) {
   const st = invChartState; if (!st) return;
-  const v = st.vals[idx], change = v - st.first;
+  const v = st.vals[idx];
+  // Baseline at this date = amount invested by then (or first value if no cost).
+  const base = (st.costs && st.costs[idx] > 0) ? st.costs[idx] : st.baseLast;
+  const change = v - base;
   const valEl = document.getElementById('invReadVal'); if (valEl) valEl.textContent = fmt(v);
-  const dEl = document.getElementById('invReadDelta'); if (dEl) { dEl.textContent = invDeltaStr(st.first, v); dEl.className = 'invReadDelta ' + invDirOf(change); }
+  const dEl = document.getElementById('invReadDelta'); if (dEl) { dEl.textContent = invDeltaStr(base, v); dEl.className = 'invReadDelta ' + invDirOf(change); }
 }
 function invShowMarker(idx, show) {
   const st = invChartState; if (!st) return;
