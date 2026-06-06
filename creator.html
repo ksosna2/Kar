@@ -23,7 +23,7 @@ img{max-width:100%;height:auto}
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("patron_theme")||"nocturne");}catch(e){document.documentElement.setAttribute("data-theme","nocturne");}</script>
+<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("patron_theme")||"tailored");}catch(e){document.documentElement.setAttribute("data-theme","tailored");}</script>
 <style>
 
 /* ============================================================
@@ -50,6 +50,23 @@ img{max-width:100%;height:auto}
   --ease:cubic-bezier(.2,.8,.2,1); --ease-premium:cubic-bezier(.16,1,.3,1);
   --duration-fast:120ms;--duration:200ms;
   --font-inter:'Hanken Grotesk';--font-serif:'Space Grotesk';--font-mono:'JetBrains Mono';
+}
+[data-theme="tailored"]{
+  color-scheme: dark;
+  --bg: #0F1622; --bg-elevated: #18202E;
+  --surface: rgba(223,216,206,0.045); --surface-2: rgba(223,216,206,0.08);
+  --fg: #E9E2D7; --muted: rgba(223,216,206,0.52); --muted-strong: rgba(223,216,206,0.76);
+  --border: rgba(223,216,206,0.12); --border-strong: rgba(223,216,206,0.22);
+  --brand: #BFA23E; --brand-2: #DCC77E; --brand-ink: #161D2B;
+  --brand-soft: rgba(191,162,62,0.14); --brand-line: rgba(191,162,62,0.32); --brand-glow: rgba(191,162,62,0.45);
+  --pos: #74B49B; --pos-soft: rgba(116,180,155,0.13); --pos-line: rgba(116,180,155,0.28);
+  --neg: #CF7A6B; --neg-soft: rgba(207,122,107,0.13); --neg-line: rgba(207,122,107,0.28);
+  --warn: #E0B05A; --warn-soft: rgba(224,176,90,0.12); --warn-line: rgba(224,176,90,0.28);
+  --info: #A7C0D7;
+  --track: rgba(223,216,206,0.08);
+  --card-shadow: 0 1px 0 rgba(223,216,206,0.06) inset, 0 28px 64px -32px rgba(0,0,0,0.82);
+  --glow-1: rgba(191,162,62,0.16); --glow-2: rgba(167,192,215,0.10);
+  --grain-opacity: 0.05; --overlay: rgba(9,12,19,0.7);
 }
 [data-theme="aurora"]{
   color-scheme: dark;
@@ -297,10 +314,10 @@ function sparkSvg(values,height,color){
 
 /* ============================ State ============================ */
 const LS='creator_standalone_v1';
-const THEMES=[{key:'nocturne',label:'Nocturne',swatch:'#8B7CFF'},{key:'aurora',label:'Aurora',swatch:'linear-gradient(135deg,#8B7BFF,#4FE3D0)'},{key:'daylight',label:'Daylight',swatch:'#6A45FF'}];
-let currentTheme=(function(){try{return localStorage.getItem('patron_theme')||'nocturne';}catch(e){return 'nocturne';}})();
-if(!THEMES.some(t=>t.key===currentTheme))currentTheme='nocturne';
-function applyTheme(name){if(!THEMES.some(t=>t.key===name))name='nocturne';currentTheme=name;document.documentElement.setAttribute('data-theme',name);try{localStorage.setItem('patron_theme',name);}catch(e){}render();}
+const THEMES=[{ key: 'tailored', label: 'Tailored', swatch: 'linear-gradient(135deg,#DCC77E,#BFA23E)' }, {key:'nocturne',label:'Nocturne',swatch:'#8B7CFF'},{key:'aurora',label:'Aurora',swatch:'linear-gradient(135deg,#8B7BFF,#4FE3D0)'},{key:'daylight',label:'Daylight',swatch:'#6A45FF'}];
+let currentTheme=(function(){try{return localStorage.getItem('patron_theme')||'tailored';}catch(e){return 'tailored';}})();
+if(!THEMES.some(t=>t.key===currentTheme))currentTheme='tailored';
+function applyTheme(name){if(!THEMES.some(t=>t.key===name))name='tailored';currentTheme=name;document.documentElement.setAttribute('data-theme',name);try{localStorage.setItem('patron_theme',name);}catch(e){}render();}
 function themeSegHtml(){return '<div class="themeSeg" role="radiogroup" aria-label="Theme">'+THEMES.map(t=>'<button type="button" class="themeBtn '+(t.key===currentTheme?'themeBtnActive':'')+'" data-act="theme" data-theme="'+t.key+'"><span class="themeSwatch" style="background:'+t.swatch+'"></span>'+t.label+'</button>').join('')+'</div>';}
 function seed(){
   const now=Date.now();

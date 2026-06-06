@@ -1,0 +1,351 @@
+/* kar-3d.css — 3D glass icon material/motion (from Claude Design handoff).
+   :root tokens intentionally removed; icons inherit the app theme (var(--brand) etc.). */
+/* ============================================================
+   KAR — 3D glass icon family
+   "Tailored Timeless" dark theme
+   Shared material, lighting, perspective & motion for kar-3d.js
+   ============================================================ */
+
+
+/* ---- The mount point ---------------------------------------
+   Drop <span class="kar3d" data-obj="finance"></span> into any
+   ~84px icon slot. Everything scales from --k (icon size).      */
+.kar3d{
+  --k:84px;                 /* slot size — set per usage          */
+  --float-dur:6s;
+  --spin-dur:20s;
+  position:relative;
+  display:inline-block;
+  width:var(--k);
+  height:var(--k);
+  perspective:520px;
+  perspective-origin:50% 42%;
+  transform-style:preserve-3d;
+  -webkit-tap-highlight-color:transparent;
+  /* light direction baked into every face's gradient */
+  --light:-38deg;
+  /* base material tint (overridable per primitive) */
+  --mat:233,226,215;        /* white-sand rgb                     */
+  /* objects are authored for an 84px slot — scale to fit any --k */
+  --objscale:calc(var(--k) / 84);
+}
+
+/* contact shadow on the navy floor */
+.kar3d::after{
+  content:"";
+  position:absolute;
+  left:50%; top:78%;
+  width:58%; height:16%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(ellipse at center,
+      rgba(0,0,0,.55), rgba(0,0,0,.28) 45%, transparent 72%);
+  filter:blur(3px);
+  border-radius:50%;
+  z-index:0;
+  animation:k-shadow var(--float-dur) ease-in-out infinite;
+}
+
+/* perspective wrapper that receives hover-parallax tilt */
+.kar3d__tilt{
+  position:absolute; inset:0;
+  transform-style:preserve-3d;
+  transform:rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg));
+  transition:transform 520ms cubic-bezier(.16,.84,.3,1.2);
+  z-index:1;
+}
+
+/* idle vertical bob */
+.kar3d__float{
+  position:absolute; inset:0;
+  transform-style:preserve-3d;
+  animation:k-float var(--float-dur) ease-in-out infinite;
+}
+
+/* slow turntable spin */
+.kar3d__spin{
+  position:absolute; inset:0;
+  transform-style:preserve-3d;
+  /* parked, well-lit base pose */
+  transform:rotateX(-14deg) rotateY(-24deg);
+  animation:k-spin var(--spin-dur) linear infinite;
+  transform-origin:50% 50%;
+}
+/* slow the turntable while inspecting, so the tilt reads */
+.kar3d:hover .kar3d__spin{ animation-duration:calc(var(--spin-dur) * 3); }
+
+/* front-facing objects sway gently instead of full spin */
+.kar3d__spin.sway{
+  animation:k-sway calc(var(--spin-dur) * .9) ease-in-out infinite;
+}
+@keyframes k-sway{
+  0%,100%{ transform:rotateX(-12deg) rotateY(-26deg); }
+  50%    { transform:rotateX(-16deg) rotateY(2deg); }
+}
+
+/* the object's local origin is the centre of the slot */
+.kar3d__obj{
+  position:absolute;
+  left:50%; top:50%;
+  transform-style:preserve-3d;
+  transform:scale(var(--objscale,1));
+}
+
+@keyframes k-float{
+  0%,100%{ transform:translateY(2.5%); }
+  50%    { transform:translateY(-3.5%); }
+}
+@keyframes k-spin{
+  0%  { transform:rotateX(-14deg) rotateY(-24deg); }
+  100%{ transform:rotateX(-14deg) rotateY(336deg); }
+}
+@keyframes k-shadow{
+  0%,100%{ opacity:.5;  transform:translate(-50%,-50%) scale(.94); }
+  50%    { opacity:.72; transform:translate(-50%,-50%) scale(1.06); }
+}
+
+/* ============================================================
+   PRIMITIVE — rounded glass box (6 faces)
+   ------------------------------------------------------------
+   JS sets --w/--h/--d (px), --r (corner), --mat (rgb), and
+   per-face transforms are written inline by the factory.
+   ============================================================ */
+.b3{ position:absolute; transform-style:preserve-3d; }
+
+.b3 .face{
+  position:absolute;
+  left:50%; top:50%;
+  border-radius:var(--r,7px);
+  background:
+    /* travelling specular streak (idle: parked off-screen) */
+    linear-gradient(115deg,
+        transparent 38%,
+        rgba(255,255,255,.42) 47%,
+        rgba(255,255,255,0) 56%) no-repeat,
+    /* studio key light from top-left */
+    linear-gradient(var(--light,-38deg),
+        rgba(255,255,255,.30),
+        rgba(255,255,255,.05) 42%,
+        rgba(var(--mat),.02) 70%),
+    /* frosted body + faint mist reflection */
+    linear-gradient(160deg,
+        rgba(var(--mat),.30),
+        rgba(var(--mat),.16) 55%),
+    linear-gradient(0deg,
+        rgba(167,192,215,.16),
+        rgba(167,192,215,0) 60%);
+  background-size:230% 230%, auto, auto, auto;
+  background-position:140% 140%, 0 0, 0 0, 0 0;
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,.30),
+    inset 0 0 14px rgba(167,192,215,.10);
+  backface-visibility:hidden;
+}
+
+/* per-face relighting (one consistent top-left key) */
+.b3 .face.f-top   { filter:brightness(1.34) saturate(1.04); }
+.b3 .face.f-left  { filter:brightness(1.08); }
+.b3 .face.f-front { filter:brightness(1.0); }
+.b3 .face.f-right { filter:brightness(.80); }
+.b3 .face.f-back  { filter:brightness(.66); }
+.b3 .face.f-bottom{ filter:brightness(.54); }
+
+/* burnished-gold rim-light on the LEADING (front) face only */
+.b3 .face.f-front{
+  box-shadow:
+    inset 1.5px 1.5px 0 0 rgba(191,162,62,.60),
+    inset 0 1px 1px rgba(255,255,255,.34),
+    inset 0 0 16px rgba(167,192,215,.12);
+}
+.b3 .face.f-top{
+  box-shadow:
+    inset 0 1.5px 0 0 rgba(220,199,126,.40),
+    inset 0 1px 1px rgba(255,255,255,.40);
+}
+
+/* travelling specular on hover */
+.kar3d:hover .b3 .face{
+  animation:k-spec 1.6s ease-in-out;
+}
+@keyframes k-spec{
+  0%  { background-position:150% 150%, 0 0,0 0,0 0; }
+  100%{ background-position:-60% -60%, 0 0,0 0,0 0; }
+}
+
+/* solid / opaque material variant (gold ingots, weight plates) */
+.b3.solid .face{
+  background:
+    linear-gradient(115deg,
+        transparent 38%, rgba(255,255,255,.55) 47%, rgba(255,255,255,0) 56%) no-repeat,
+    linear-gradient(var(--light,-38deg),
+        rgba(255,255,255,.42), rgba(255,255,255,.06) 45%, rgba(0,0,0,.18) 78%),
+    linear-gradient(160deg, rgb(var(--mat)), rgba(var(--mat),.78));
+  background-size:230% 230%, auto, auto;
+  background-position:140% 140%, 0 0, 0 0;
+  border-color:rgba(255,255,255,.22);
+}
+
+/* ============================================================
+   OBJECT-SPECIFIC MOTION & MATERIAL
+   ============================================================ */
+
+/* 3 · supplements — pill turns slowly on its own long axis */
+.pill-spin{ animation:k-pillspin 9s linear infinite; }
+@keyframes k-pillspin{
+  0%  { transform:rotateZ(28deg) rotateX(12deg) rotateY(0deg); }
+  100%{ transform:rotateZ(28deg) rotateX(12deg) rotateY(360deg); }
+}
+
+/* 4 · band — glowing core node pulses like a heartbeat */
+.band-core{
+  position:absolute; left:50%; top:50%;
+  width:20px; height:20px; margin:-10px 0 0 -10px;
+  border-radius:50%;
+  background:radial-gradient(circle at 38% 34%,
+      #F3E6B0, var(--brand) 52%, #7d6620 100%);
+  box-shadow:0 0 12px 2px rgba(191,162,62,.55),
+             inset 0 0 6px rgba(255,255,255,.5);
+  transform:translateZ(2px);
+  animation:k-beat 1.15s cubic-bezier(.5,0,.5,1) infinite;
+}
+@keyframes k-beat{
+  0%,100%{ transform:translateZ(2px) scale(.86); box-shadow:0 0 8px 1px rgba(191,162,62,.40), inset 0 0 6px rgba(255,255,255,.5); }
+  18%    { transform:translateZ(2px) scale(1.18); box-shadow:0 0 18px 5px rgba(191,162,62,.70), inset 0 0 6px rgba(255,255,255,.6); }
+  34%    { transform:translateZ(2px) scale(.96); }
+  52%    { transform:translateZ(2px) scale(1.08); box-shadow:0 0 14px 3px rgba(191,162,62,.55), inset 0 0 6px rgba(255,255,255,.55); }
+}
+
+/* 5 · water — droplet body + internal highlight + ripple */
+.drop{
+  position:absolute; left:50%; top:50%;
+  width:46px; height:46px; margin:-23px 0 0 -23px;
+  /* classic upward teardrop: sharp top corner, round the rest */
+  border-radius:0 50% 50% 50%;
+  background:
+    radial-gradient(circle at 62% 64%, rgba(255,255,255,.85), rgba(255,255,255,0) 26%),
+    linear-gradient(300deg, rgba(167,192,215,.58), rgba(167,192,215,.20) 60%),
+    radial-gradient(circle at 40% 32%, rgba(50,90,130,.42), rgba(167,192,215,.10) 60%);
+  border:1px solid rgba(220,236,250,.38);
+  box-shadow:inset -5px 6px 12px rgba(40,72,110,.35),
+             inset 4px -3px 8px rgba(255,255,255,.5),
+             0 0 16px rgba(167,192,215,.28);
+  transform:rotate(45deg);
+}
+.drop-spec{
+  position:absolute; left:56%; top:54%;
+  width:9px; height:15px; border-radius:50%;
+  background:radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 70%);
+  transform:rotate(-45deg);
+  animation:k-spark-pulse 3.4s ease-in-out infinite;
+}
+.drop-ripple{
+  position:absolute; left:50%; top:50%;
+  width:40px; height:12px; margin:24px 0 0 -20px;
+  border:1.5px solid rgba(167,192,215,.5);
+  border-radius:50%;
+  opacity:0;
+  animation:k-ripple 3.4s ease-out infinite;
+}
+@keyframes k-ripple{
+  0%   { opacity:0;  transform:translateZ(-6px) scale(.4); }
+  30%  { opacity:.55;}
+  100% { opacity:0;  transform:translateZ(-6px) scale(1.25); }
+}
+@keyframes k-spark-pulse{
+  0%,100%{ opacity:.6; } 50%{ opacity:1; }
+}
+
+/* 6 · creator — clapper top bar opens & closes on a hinge */
+.clap-hinge{
+  transform-origin:50% 100%;
+  animation:k-clap 4.5s cubic-bezier(.5,.05,.4,1) infinite;
+}
+@keyframes k-clap{
+  0%,62%,100%{ transform:translate3d(0,-14px,0) rotateX(0deg); }
+  16%,46%    { transform:translate3d(0,-14px,0) rotateX(38deg); }
+}
+.clap-stripe{
+  background-image:
+    repeating-linear-gradient(58deg,
+      rgba(233,226,215,.92) 0 9px,
+      rgba(46,52,66,.96) 9px 18px) !important;
+  background-size:auto !important;
+  border-color:rgba(255,255,255,.18) !important;
+}
+
+/* 7 · goals — pennant flag (triangle), faint wave */
+.pennant{
+  position:absolute; left:50%; top:50%;
+  width:0; height:0;
+  border-style:solid;
+  border-width:9px 0 9px 18px;
+  border-color:transparent transparent transparent var(--brand);
+  filter:drop-shadow(0 0 4px rgba(191,162,62,.5));
+  transform-origin:0% 50%;
+  animation:k-wave 3s ease-in-out infinite;
+}
+@keyframes k-wave{
+  0%,100%{ transform:translate3d(28px,-37px,6px) skewY(0deg) scaleX(1); }
+  50%    { transform:translate3d(28px,-37px,6px) skewY(-6deg) scaleX(.9); }
+}
+
+/* 8 · progress — gold sparkline draws / pulses, tip dot */
+.spark-holder{
+  position:absolute; left:50%; top:50%;
+  width:56px; height:44px; margin:-22px 0 0 -28px;
+}
+.spark{ width:56px; height:44px; overflow:visible; }
+.spark-line{
+  fill:none;
+  stroke:var(--brand-2);
+  stroke-width:3.6;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  filter:drop-shadow(0 1px 0 rgba(255,255,255,.4)) drop-shadow(0 0 4px rgba(220,199,126,.7));
+  stroke-dasharray:120;
+  stroke-dashoffset:120;
+  animation:k-draw 4s ease-in-out infinite;
+}
+.spark-dot{
+  fill:var(--brand-2);
+  filter:drop-shadow(0 0 4px rgba(220,199,126,.8));
+  opacity:0;
+  animation:k-dot 4s ease-in-out infinite;
+}
+@keyframes k-draw{
+  0%   { stroke-dashoffset:120; }
+  45%  { stroke-dashoffset:0; }
+  78%  { stroke-dashoffset:0; }
+  100% { stroke-dashoffset:120; }
+}
+@keyframes k-dot{
+  0%,40%{ opacity:0; transform:scale(.4); }
+  48%   { opacity:1; transform:scale(1.25); }
+  78%   { opacity:1; transform:scale(1); }
+  100%  { opacity:0; transform:scale(.4); }
+}
+
+/* ============================================================
+   REDUCED MOTION — kill all motion, keep a well-lit parked pose
+   ============================================================ */
+@media (prefers-reduced-motion: reduce){
+  .kar3d__float,
+  .kar3d__spin,
+  .kar3d::after,
+  .b3 .face,
+  .pill-spin,
+  .band-core,
+  .clap-hinge,
+  .pennant,
+  .drop-spec,
+  .drop-ripple,
+  .spark-line,
+  .spark-dot,
+  .k-anim{ animation:none !important; }
+  .kar3d__tilt{ transition:none !important; }
+  .kar3d__spin{ transform:rotateX(-15deg) rotateY(-26deg); }
+  .clap-hinge{ transform:translate3d(0,-14px,0) rotateX(22deg); }
+  .spark-line{ stroke-dashoffset:0; }
+  .spark-dot{ opacity:1; }
+  .band-core{ transform:translateZ(2px) scale(1); }
+}

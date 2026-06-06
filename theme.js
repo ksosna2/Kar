@@ -11,17 +11,18 @@
 window.Patron = (function () {
   const KEY = 'patron_theme';
   const THEMES = [
-    { key: 'nocturne', label: 'Nocturne', swatch: '#8B7CFF' },
+    
+    { key: 'tailored', label: 'Tailored', swatch: 'linear-gradient(135deg,#DCC77E,#BFA23E)' },{ key: 'nocturne', label: 'Nocturne', swatch: '#8B7CFF' },
     { key: 'aurora',   label: 'Aurora',   swatch: 'linear-gradient(135deg,#8B7BFF,#4FE3D0)' },
     { key: 'daylight', label: 'Daylight', swatch: '#6A45FF' },
   ];
 
   function current() {
-    try { return localStorage.getItem(KEY) || 'nocturne'; } catch (e) { return 'nocturne'; }
+    try { return localStorage.getItem(KEY) || 'tailored'; } catch (e) { return 'tailored'; }
   }
 
   function apply(name) {
-    if (!THEMES.some(t => t.key === name)) name = 'nocturne';
+    if (!THEMES.some(t => t.key === name)) name = 'tailored';
     document.documentElement.setAttribute('data-theme', name);
     try { localStorage.setItem(KEY, name); } catch (e) {}
     document.querySelectorAll('.themeBtn').forEach(b =>

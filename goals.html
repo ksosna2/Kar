@@ -21,7 +21,7 @@ img{max-width:100%;height:auto}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("patron_theme")||"nocturne");}catch(e){document.documentElement.setAttribute("data-theme","nocturne");}</script>
+<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("patron_theme")||"tailored");}catch(e){document.documentElement.setAttribute("data-theme","tailored");}</script>
 <title>Dashboard · Karol</title>
 <style>
 :root {
@@ -49,6 +49,23 @@ img{max-width:100%;height:auto}
   --font: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Space Grotesk', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+[data-theme="tailored"] {
+  color-scheme: dark;
+  --bg: #0F1622; --bg-elevated: #18202E;
+  --surface: rgba(223,216,206,0.045); --surface-2: rgba(223,216,206,0.08);
+  --fg: #E9E2D7; --muted: rgba(223,216,206,0.52); --muted-strong: rgba(223,216,206,0.76);
+  --border: rgba(223,216,206,0.12); --border-strong: rgba(223,216,206,0.22);
+  --brand: #BFA23E; --brand-2: #DCC77E; --brand-ink: #161D2B;
+  --brand-soft: rgba(191,162,62,0.14); --brand-line: rgba(191,162,62,0.32); --brand-glow: rgba(191,162,62,0.45);
+  --pos: #74B49B; --pos-soft: rgba(116,180,155,0.13); --pos-line: rgba(116,180,155,0.28);
+  --neg: #CF7A6B; --neg-soft: rgba(207,122,107,0.13); --neg-line: rgba(207,122,107,0.28);
+  --warn: #E0B05A; --warn-soft: rgba(224,176,90,0.12); --warn-line: rgba(224,176,90,0.28);
+  --info: #A7C0D7;
+  --track: rgba(223,216,206,0.08);
+  --card-shadow: 0 1px 0 rgba(223,216,206,0.06) inset, 0 28px 64px -32px rgba(0,0,0,0.82);
+  --glow-1: rgba(191,162,62,0.16); --glow-2: rgba(167,192,215,0.10);
+  --grain-opacity: 0.05; --overlay: rgba(9,12,19,0.7);
 }
 [data-theme="aurora"] {
   color-scheme: dark;
@@ -748,7 +765,7 @@ body::after {
 <div class="page">
 
   <a class="back" href="index.html"><span class="backArrow">←</span> Karol</a>
-  <div class="dash-head"><h1 class="dash-title" id="dashTitle">Dashboard</h1><div class="themeSeg" role="radiogroup" aria-label="Theme"><button type="button" class="themeBtn" data-theme="nocturne"><span class="themeSwatch" style="background:#8B7CFF"></span><span class="themeBtnLabel">Nocturne</span></button><button type="button" class="themeBtn" data-theme="aurora"><span class="themeSwatch" style="background:linear-gradient(135deg,#8B7BFF,#4FE3D0)"></span><span class="themeBtnLabel">Aurora</span></button><button type="button" class="themeBtn" data-theme="daylight"><span class="themeSwatch" style="background:#6A45FF"></span><span class="themeBtnLabel">Daylight</span></button></div></div>
+  <div class="dash-head"><h1 class="dash-title" id="dashTitle">Dashboard</h1><div class="themeSeg" role="radiogroup" aria-label="Theme"><button type="button" class="themeBtn" data-theme="tailored"><span class="themeSwatch" style="background:linear-gradient(135deg,#DCC77E,#BFA23E)"></span><span class="themeBtnLabel">Tailored</span></button><button type="button" class="themeBtn" data-theme="nocturne"><span class="themeSwatch" style="background:#8B7CFF"></span><span class="themeBtnLabel">Nocturne</span></button><button type="button" class="themeBtn" data-theme="aurora"><span class="themeSwatch" style="background:linear-gradient(135deg,#8B7BFF,#4FE3D0)"></span><span class="themeBtnLabel">Aurora</span></button><button type="button" class="themeBtn" data-theme="daylight"><span class="themeSwatch" style="background:#6A45FF"></span><span class="themeBtnLabel">Daylight</span></button></div></div>
 
   <div class="ticker-row">
     <div class="goal-ticker" id="goalTicker" aria-live="polite" aria-atomic="true">
@@ -1622,7 +1639,7 @@ body::after {
 })();
 </script>
 
-<script>(function(){function cur(){try{return localStorage.getItem("patron_theme")||"nocturne";}catch(e){return "nocturne";}}function paint(){var c=cur();document.querySelectorAll(".themeBtn").forEach(function(b){b.classList.toggle("themeBtnActive",b.dataset.theme===c);});}document.addEventListener("click",function(e){var b=e.target.closest(".themeBtn");if(!b)return;var n=b.dataset.theme;document.documentElement.setAttribute("data-theme",n);try{localStorage.setItem("patron_theme",n);}catch(e){}paint();});paint();})();</script>
+<script>(function(){function cur(){try{return localStorage.getItem("patron_theme")||"tailored";}catch(e){return "tailored";}}function paint(){var c=cur();document.querySelectorAll(".themeBtn").forEach(function(b){b.classList.toggle("themeBtnActive",b.dataset.theme===c);});}document.addEventListener("click",function(e){var b=e.target.closest(".themeBtn");if(!b)return;var n=b.dataset.theme;document.documentElement.setAttribute("data-theme",n);try{localStorage.setItem("patron_theme",n);}catch(e){}paint();});paint();})();</script>
 <script>(function(){try{var p=JSON.parse(localStorage.getItem('patron_profile_v1')||'null');var n=(p&&p.name)?String(p.name).trim():'';var el=document.getElementById('dashTitle');if(el)el.textContent=(n?n+'’s':'Your')+' Dashboard';}catch(e){}})();</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="db.js?v=15"></script>
