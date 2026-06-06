@@ -1661,13 +1661,13 @@ function settingsModalHtml() {
   function field(id, label, set, value, type, placeholder, hint) {
     return '<div class="fieldGroup"><div class="fieldLabelRow"><span class="fieldLabel">' + label + '</span>'
       + '<span class="keyStatus ' + (set ? 'set' : 'unset') + '">' + (set ? 'set' : 'not set') + '</span></div>'
-      + '<input class="settingsInput" id="' + id + '" type="' + type + '" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(value || '') + '" placeholder="' + esc(placeholder) + '" />'
+      + '<input class="settingsInput" id="' + id + '" type="' + type + '" autocomplete="off" autocapitalize="off" spellcheck="false" autocorrect="off" data-1p-ignore="true" data-lpignore="true" data-form-type="other" value="' + esc(value || '') + '" placeholder="' + esc(placeholder) + '" />'
       + '<div class="fieldHint">' + hint + '</div></div>';
   }
   return '<div class="importOverlay" data-act="closeSettings"><div class="importPanel" data-stop="1">'
     + '<div class="importHead"><div><div class="importEyebrow">Settings</div><h2 class="importTitle">API <em>keys</em></h2></div><button type="button" class="importClose" data-act="closeSettings">×</button></div>'
     + '<p class="importDesc">Live stock prices (US + international) work out of the box — no key needed. Add an Anthropic key to unlock AI screenshot import. Keys are stored only in this browser and sent directly from your device to Anthropic — never to any other server.</p>'
-    + field('settings-anthropic', 'Anthropic key · AI screenshot import', aSet, settings.anthropicKey, 'password', 'paste your Anthropic API key (sk-ant-…)', 'Key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Powers reading statements / subs / receipts from a screenshot.')
+    + field('settings-anthropic', 'Anthropic key · AI features', aSet, settings.anthropicKey, 'text', 'paste your Anthropic API key (sk-ant-…)', 'Key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Shown as plain text (stored only in this browser) so password managers don’t overwrite it. Powers the AI news brief/chat and screenshot import.')
     + field('settings-model', 'Anthropic model', !!settings.anthropicModel, settings.anthropicModel, 'text', DEFAULT_MODEL, 'Vision-capable model used for import. Change it if your account uses a different model id.')
     + '<div class="settingsActions"><button type="button" class="ghostBtn" data-act="closeSettings">Cancel</button><button type="button" class="quickAddBtn" style="height:38px" data-act="saveSettings">Save keys</button></div>'
     + '</div></div>';
