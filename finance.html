@@ -316,6 +316,7 @@ body {
 .invDot { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: var(--brand); border: 2px solid var(--bg-elevated); box-shadow: 0 0 0 1px var(--brand-line), 0 0 10px var(--brand-glow); transform: translate(-50%,-50%); opacity: 0; pointer-events: none; transition: opacity 120ms var(--ease); }
 .invTip { position: absolute; top: -3px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted-strong); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 9px; opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity 120ms var(--ease); }
 .invXAxis { display:flex; justify-content:space-between; margin-top: 9px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
+.invChartFoot { display:flex; justify-content:flex-end; margin-top: 8px; }
 
 /* Donut */
 .donutStage { position: relative; display:flex; align-items:center; justify-content:center; margin: var(--space-3) 0; }
@@ -677,6 +678,7 @@ let settings = loadSettings();
 const ui = {
   chartPeriod: 'ALL',
   invChartPeriod: 'ALL',
+  invHistBusy: false,
   holdingId: null,   // id of the holding whose detail pop-up is open
   show: {},          // bankAdd, cryptoAdd, otherAdd, stocksAdd, stocksManual
   edit: null,        // { id, field:'name'|'amt'|'shares' }
@@ -1045,12 +1047,13 @@ function investmentsChartHtml() {
   if (history.length < 2) {
     invChartState = null;
     const valStr = history.length ? esc(fmt(history[history.length - 1].v)) : '—';
-    const note = full.length === 0
-      ? 'Add a stock holding and tap ↻ refresh prices to start tracking your portfolio over time.'
-      : 'Tracking your portfolio — the line fills in as values change. Refresh prices to add points.';
+    const note = invHasHoldings()
+      ? 'Pull your portfolio’s real price history to fill this chart — daily values for every holding, going back up to a year.'
+      : 'Add a stock holding to track your investments over time.';
     return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft"><span class="chartLabel">Investments</span>'
       + '<span class="invReadVal" id="invReadVal">' + valStr + '</span></div>' + periodToggle + '</div>'
-      + '<div class="chartEmpty">' + note + '</div></div>';
+      + '<div class="chartEmpty">' + note + '</div>'
+      + '<div class="invChartFoot">' + invHistBtnHtml('↻ Load price history') + '</div></div>';
   }
 
   const n = history.length, first = history[0].v, last = history[n - 1].v, change = last - first;
@@ -1075,7 +1078,66 @@ function investmentsChartHtml() {
     + '<line class="chartGrid" x1="0" x2="' + W + '" y1="50" y2="50"/><line class="chartGrid" x1="0" x2="' + W + '" y1="100" y2="100"/><line class="chartGrid" x1="0" x2="' + W + '" y1="150" y2="150"/>'
     + '<path d="' + areaD + '" fill="url(#invGrad)"/><path d="' + lineD + '" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="chartLineStroke"/></svg>'
     + '<div class="invCrosshair" id="invCrosshair"></div><div class="invDot" id="invDot"></div><div class="invTip" id="invTip"></div>'
-    + '</div><div class="invXAxis">' + axis + '</div></div>';
+    + '</div><div class="invXAxis">' + axis + '</div>'
+    + '<div class="invChartFoot">' + invHistBtnHtml('↻ Reload price history') + '</div></div>';
+}
+
+function invHasHoldings() { return state.accounts.some(a => a.type === 'stocks' && a.ticker && (Number(a.shares) || 0) > 0); }
+function invHistBtnHtml(label) {
+  if (!invHasHoldings()) return '';
+  return '<button type="button" class="linkAction" data-act="loadInvHistory"' + (ui.invHistBusy ? ' disabled' : '') + '>' + (ui.invHistBusy ? 'loading history…' : label) + '</button>';
+}
+function invDayKey(ms) { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+// Backfill investmentsHistory from real daily price history (Yahoo via /api/quote
+// series mode). Builds a per-day portfolio value: for each holding, native close
+// → minor-unit normalise → current FX → × shares, forward-filled and summed over
+// a common date grid (current shares assumed across the window).
+async function loadInvestmentsHistory() {
+  const holdings = state.accounts.filter(a => a.type === 'stocks' && a.ticker && (Number(a.shares) || 0) > 0);
+  if (!holdings.length) { alert('Add a stock holding with shares first.'); return; }
+  ui.invHistBusy = true; render();
+  const failed = [];
+  const series = await Promise.all(holdings.map(async a => {
+    try {
+      const r = await fetch('/api/quote?series=1&range=2y&interval=1d&symbol=' + encodeURIComponent(a.ticker));
+      const j = await r.json();
+      if (!j || !j.ok || !Array.isArray(j.points) || !j.points.length) { failed.push(a.ticker); return null; }
+      let ccy = String(j.currency || 'USD'), div = 1;
+      if (/^gb[xp]$/i.test(ccy)) { div = 100; ccy = 'GBP'; }
+      else if (/^zac$/i.test(ccy)) { div = 100; ccy = 'ZAR'; }
+      else if (/^ila[c]?$/i.test(ccy)) { div = 100; ccy = 'ILS'; }
+      else ccy = ccy.toUpperCase();
+      const rate = rates[ccy];
+      if (!rate) { failed.push(a.ticker + ' (no FX)'); return null; }
+      const shares = Number(a.shares) || 0;
+      const map = new Map(); let firstDay = null;
+      j.points.forEach(p => { const c = Number(p.c); if (!isFinite(c)) return; const k = invDayKey(p.t * 1000); map.set(k, (c / div) / rate * shares); if (firstDay === null || k < firstDay) firstDay = k; });
+      return map.size ? { map: map, firstDay: firstDay } : null;
+    } catch (e) { failed.push(a.ticker); return null; }
+  }));
+  const valid = series.filter(Boolean);
+  ui.invHistBusy = false;
+  if (!valid.length) { render(); alert('Could not load price history.' + (failed.length ? '\n\nFailed: ' + failed.join(', ') : '')); return; }
+  // Start where every holding has data (latest first-day), forward-fill, sum.
+  const start = valid.reduce((mx, s) => s.firstDay > mx ? s.firstDay : mx, valid[0].firstDay);
+  const daySet = new Set();
+  valid.forEach(s => s.map.forEach((_, k) => daySet.add(k)));
+  const days = Array.from(daySet).sort();
+  const lastVal = valid.map(() => null);
+  const combined = [];
+  days.forEach(d => {
+    valid.forEach((s, i) => { if (s.map.has(d)) lastVal[i] = s.map.get(d); });
+    if (d < start) return;
+    let sum = 0, ok = true;
+    for (let i = 0; i < valid.length; i++) { if (lastVal[i] == null) { ok = false; break; } sum += lastVal[i]; }
+    if (ok) combined.push({ t: Date.parse(d + 'T12:00:00'), v: sum });
+  });
+  if (!combined.length) { render(); alert('Not enough overlapping history to build the chart.'); return; }
+  state.investmentsHistory = combined;
+  maybeSnapshotNw();   // tack on today's live value if it differs
+  save(); render();
+  if (failed.length) alert('Loaded history for ' + valid.length + ' holding(s). Could not include: ' + failed.join(', ') + '.');
 }
 
 function donutArcPath(cx, cy, rO, rI, a1, a2) {
@@ -1901,6 +1963,7 @@ document.addEventListener('click', e => {
     case 'tab': actions.setActiveTab(btn.dataset.tab); break;
     case 'chartPeriod': ui.chartPeriod = btn.dataset.p; render(); break;
     case 'invChartPeriod': ui.invChartPeriod = btn.dataset.p; render(); break;
+    case 'loadInvHistory': loadInvestmentsHistory(); break;
     case 'showAdd': ui.show[btn.dataset.show] = true; render(); break;
     case 'refreshPrices': refreshStockPrices(); break;
     case 'openSettings': openSettings(); break;
