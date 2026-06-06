@@ -336,8 +336,15 @@ body {
 .holdingShares { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted-strong); cursor: pointer; border-radius: 6px; padding: 2px 5px; text-align:right; }
 .holdingShares:hover { background: var(--brand-soft); }
 .holdingSharesInput { width: 64px; text-align:right; }
+.holdingPriceCol { display:flex; flex-direction:column; align-items:flex-start; gap: 2px; }
 .holdingPrice { display:inline-flex; align-items:baseline; gap: 6px; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
 .holdingPriceNative { color: var(--muted); opacity: 0.7; font-size: 11px; }
+.holdingCost { font-family: var(--font-mono); font-size: 10px; color: var(--muted); opacity: 0.85; cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; }
+.holdingCost:hover { background: var(--brand-soft); color: var(--brand); opacity: 1; }
+.holdingCostInput { width: 78px; }
+.gainPct { font-family: var(--font-mono); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 1px 5px; border-radius: var(--radius-pill); margin-left: 6px; }
+.gainPct.up { background: var(--pos-soft); color: var(--pos); }
+.gainPct.down { background: var(--neg-soft); color: var(--neg); }
 .holdingsFooter { display:flex; justify-content:space-between; align-items:center; gap: var(--space-3); padding: 6px 2px 0; }
 .linkAction { background: transparent; border:0; padding: 4px 0; color: var(--muted-strong); font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.01em; cursor: pointer; transition: color var(--duration) var(--ease-premium); }
 .linkAction:hover { color: var(--brand); }
@@ -520,10 +527,10 @@ body {
 const STORAGE_KEY = 'finance_standalone_v1';
 const ACTIVITY_MAX = 50;
 const NW_HISTORY_MAX = 500;
-const CURRENCIES = ['CHF', 'USD', 'EUR', 'GBP'];
+const CURRENCIES = ['CHF', 'USD', 'EUR', 'GBP', 'PLN'];
 const TAB_KEYS = ['net', 'subs', 'orders', 'wish'];
 const TAB_LABELS = { net: 'net worth', subs: 'subs', orders: 'orders', wish: 'wishlist' };
-const DEFAULT_RATES = { CHF: 1, USD: 1, EUR: 1, GBP: 1 };
+const DEFAULT_RATES = { CHF: 1, USD: 1, EUR: 1, GBP: 1, PLN: 1 };
 
 function genId(prefix) { return (prefix || 'id') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
 
@@ -680,6 +687,14 @@ const actions = {
     save(); render();
   },
   setHoldingShares(id, shares) { const a = state.accounts.find(x => x.id === id); if (a && a.type === 'stocks' && a.ticker && isFinite(shares) && shares >= 0) a.shares = shares; save(); render(); },
+  // Average purchase price PER SHARE, stored as entered + the currency it was
+  // typed in, so the displayed cost is FX-stable. Empty/zero clears it.
+  setHoldingCost(id, displayAmount) {
+    const a = state.accounts.find(x => x.id === id); if (!a || a.type !== 'stocks' || !a.ticker) return;
+    if (!isFinite(displayAmount) || displayAmount <= 0) { delete a.costEntered; delete a.costCcy; }
+    else { a.costEntered = displayAmount; a.costCcy = state.currency; }
+    save(); render();
+  },
 
   addSubscription(input) {
     const name = input.name.trim(); if (!name || !isFinite(input.displayAmount)) return;
@@ -989,13 +1004,34 @@ function holdingRowHtml(acct) {
   const nativeStr = (hasPrice && acct.lastCurrency && acct.lastPrice != null && acct.lastCurrency !== state.currency)
     ? acct.lastCurrency + ' ' + Number(acct.lastPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })
     : '';
-  const priceCell = hasPrice
+  const priceLine = hasPrice
     ? '<span class="holdingPrice" title="Live price' + (acct.lastPriceAt ? ' · ' + new Date(acct.lastPriceAt).toLocaleString() : '') + '">'
       + (nativeStr ? '<span class="holdingPriceNative">' + esc(nativeStr) + '</span>' : '')
       + esc(fmt(acct.lastPriceChf)) + '</span>'
     : '<span class="holdingPrice" title="Tap ↻ refresh prices for a live quote">—</span>';
+  // Cost-basis editor: shows what you paid per share (in the currency you typed),
+  // tappable to set/edit. When unset, a faint "+ avg cost" prompt.
+  const editingCost = ui.edit && ui.edit.id === acct.id && ui.edit.field === 'cost';
+  const hasCost = isFinite(Number(acct.costEntered)) && Number(acct.costEntered) > 0;
+  const costCell = editingCost
+    ? '<input class="inlineEditInput holdingCostInput" id="edit-cost-' + acct.id + '" type="number" step="0.0001" placeholder="cost / share" value="' + (hasCost ? esc(String(acct.costEntered)) : '') + '" data-edit="cost" data-id="' + acct.id + '" />'
+    : (hasCost
+        ? '<span class="holdingCost" data-act="editCost" data-id="' + acct.id + '" title="Average purchase price per share · tap to edit">@ ' + esc((acct.costCcy || state.currency) + ' ' + Number(acct.costEntered).toLocaleString('en-US', { maximumFractionDigits: 2 })) + '</span>'
+        : '<span class="holdingCost" data-act="editCost" data-id="' + acct.id + '" title="Set your average purchase price to track gain/loss">+ avg cost</span>');
+  const priceCell = '<div class="holdingPriceCol">' + priceLine + costCell + '</div>';
+  // Gain/loss % from cost basis vs live price (both normalised to CHF, so it's
+  // the true price move regardless of display currency).
+  const costChf = hasCost ? displayToChf(Number(acct.costEntered), acct.costCcy || state.currency, rates) : null;
+  let gainBadge = '';
+  if (hasPrice && costChf && costChf > 0) {
+    const pct = (acct.lastPriceChf / costChf - 1) * 100;
+    const plChf = (acct.lastPriceChf - costChf) * (Number(acct.shares) || 0);
+    const dir = pct >= 0 ? 'up' : 'down';
+    const arrow = pct >= 0 ? '▲' : '▼';
+    gainBadge = '<span class="gainPct ' + dir + '" title="' + esc((pct >= 0 ? '+' : '') + fmt(plChf) + ' vs cost') + '">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
+  }
   const amtCell = hasPrice
-    ? '<span class="accountRowAmount" title="shares × live price">' + esc(fmt(acct.amountCHF)) + '</span>'
+    ? '<span class="accountRowAmount" title="shares × live price">' + esc(fmt(acct.amountCHF)) + gainBadge + '</span>'
     : '<span class="accountRowAmount" title="Tap ↻ refresh prices for a live quote">—</span>';
   return '<div class="holdingRow"><span class="tickerPill">' + esc(acct.ticker) + '</span>' + sharesCell
     + priceCell + amtCell
@@ -1571,6 +1607,7 @@ function commitAmt(id, val) {
   actions.setAccountAmount(id, Math.max(0, nextDisplay));
 }
 function commitShares(id, val) { const next = parseFloat(val); ui.edit = null; if (!isNaN(next) && next >= 0) actions.setHoldingShares(id, next); else render(); }
+function commitCost(id, val) { ui.edit = null; const s = String(val).trim(); if (s === '') { actions.setHoldingCost(id, 0); return; } const next = parseFloat(s); if (!isNaN(next)) actions.setHoldingCost(id, next); else render(); }
 
 /* ============================================================
  * Event wiring
@@ -1622,6 +1659,7 @@ function commitEdit(t) {
   if (field === 'name') commitName(id, t.value);
   else if (field === 'amt') commitAmt(id, t.value);
   else if (field === 'shares') commitShares(id, t.value);
+  else if (field === 'cost') commitCost(id, t.value);
 }
 
 document.addEventListener('click', e => {
@@ -1652,6 +1690,7 @@ document.addEventListener('click', e => {
     case 'editName': ui.edit = { id, field: 'name' }; render(); break;
     case 'editAmt': ui.edit = { id, field: 'amt' }; render(); break;
     case 'editShares': ui.edit = { id, field: 'shares' }; render(); break;
+    case 'editCost': ui.edit = { id, field: 'cost' }; render(); break;
     case 'delAccount': actions.deleteAccount(id); break;
 
     case 'addAccount': {
