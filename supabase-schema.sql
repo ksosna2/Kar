@@ -1,5 +1,5 @@
 -- ============================================================
---  Patron / Rowan — complete Supabase setup.
+--  Patron / Karol — complete Supabase setup.
 --  Run this ONCE in your Supabase project:  SQL Editor → New query → paste → Run.
 --  It sets up BOTH:
 --    1. the data table  (everything except photos: finance, water, gym, goals…)
