@@ -56,6 +56,8 @@ window.PatronDB = (function () {
       || k.indexOf('po_supabase') === 0
       || k === TS_KEY || k === PH_KEY
       || k === 'patron_theme'                   // theme is a per-device preference
+      || k === 'finance_news_v1'                // stock-news cache — local only, don't sync/reload on it
+      || k === 'finance_news_summary_v1'        // AI news brief — local only
       || k.indexOf('patron_hydrated_') === 0
       || k.indexOf('patron_initreload_') === 0
       || k.indexOf('patron_snapadopt_') === 0;

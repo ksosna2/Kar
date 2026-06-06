@@ -793,7 +793,7 @@ function pushActivity(entry) {
  * ============================================================ */
 const actions = {
   setCurrency(c) { state.currency = c; save(); render(); },
-  setActiveTab(t) { state.activeTab = t; save(); render(); if (t === 'news') loadStockNews(false); },
+  setActiveTab(t) { state.activeTab = t; save(); render(); },
 
   addAccount(type, name, displayAmount) {
     const trimmed = name.trim(); if (!trimmed || !isFinite(displayAmount)) return;
@@ -2335,9 +2335,9 @@ fetch('https://open.er-api.com/v6/latest/CHF')
 
 applyTheme(currentTheme);
 
-// Stock news: load on boot if that tab is open, and keep it fresh while viewing.
-if (state.activeTab === 'news') loadStockNews(false);
-setInterval(function () { if (state.activeTab === 'news' && navigator.onLine !== false) loadStockNews(false); }, 20 * 60 * 1000);
+// Stock news is fetched only on demand via the "↻ refresh news" button — no
+// auto-refresh, so the page doesn't re-render on a timer. Cached headlines show
+// immediately on open.
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="db.js?v=15"></script>
