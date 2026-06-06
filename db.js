@@ -184,16 +184,19 @@ window.PatronDB = (function () {
   function _startSync() {
     if (!ready) return;
     (async function () {
-      await _reconcile(true);
+      await _reconcile(true);   // hydrate from cloud once on load (may reload once)
       setInterval(_pushIfChanged, 2500);
       window.addEventListener('storage', _schedulePush);
-      function refresh() { if (!document.hidden) _reconcile(true); }
+      // While the page is open, adopt remote changes SILENTLY (no auto-reload) —
+      // a forced reload on every focus / realtime change is what caused the page
+      // to constantly refresh. Cross-device updates apply on the next load.
+      function refresh() { if (!document.hidden) _reconcile(false); }
       document.addEventListener('visibilitychange', refresh);
       window.addEventListener('focus', refresh);
       try {
         sb.channel('snap').on('postgres_changes',
           { event: '*', schema: 'public', table: 'app_state', filter: 'key=eq.' + SNAP_KEY },
-          function () { _reconcile(true); }).subscribe();
+          function () { _reconcile(false); }).subscribe();
       } catch (_) {}
     })();
   }
