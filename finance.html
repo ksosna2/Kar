@@ -317,6 +317,8 @@ body {
 .invTip { position: absolute; top: -3px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted-strong); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 2px 9px; opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity 120ms var(--ease); }
 .invXAxis { display:flex; justify-content:space-between; margin-top: 9px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
 .invChartFoot { display:flex; justify-content:flex-end; margin-top: 8px; }
+.invCostLine { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 5; opacity: 0.55; }
+.invCostLabel { position:absolute; right: 6px; transform: translateY(-50%); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); opacity: 0.75; pointer-events: none; }
 
 /* Donut */
 .donutStage { position: relative; display:flex; align-items:center; justify-content:center; margin: var(--space-3) 0; }
@@ -599,6 +601,15 @@ function monthlyEquivalent(s) { const a = Number(s.amountCHF) || 0; if (s.period
 function netWorthChf(accounts) { return accounts.reduce((sum, a) => sum + (Number(a.amountCHF) || 0), 0); }
 function netWorthByType(accounts) { const out = { bank: 0, stocks: 0, crypto: 0, other: 0 }; accounts.forEach(a => { out[a.type] = (out[a.type] || 0) + (Number(a.amountCHF) || 0); }); return out; }
 function investmentsChf(accounts) { return accounts.reduce((s, a) => s + (a.type === 'stocks' ? (Number(a.amountCHF) || 0) : 0), 0); }
+// Total cost basis of ticker holdings that have one (CHF). Baseline for the
+// investments chart's gain/loss so it matches the per-holding badges.
+function investmentsCostChf() {
+  return state.accounts.reduce((s, a) => {
+    if (a.type !== 'stocks' || !a.ticker) return s;
+    if (!(isFinite(Number(a.costEntered)) && Number(a.costEntered) > 0)) return s;
+    return s + displayToChf(Number(a.costEntered), a.costCcy || state.currency, rates) * (Number(a.shares) || 0);
+  }, 0);
+}
 
 function nextRenewalDate(iso, period) {
   if (!iso) return null;
@@ -1056,27 +1067,40 @@ function investmentsChartHtml() {
       + '<div class="invChartFoot">' + invHistBtnHtml('↻ Load price history') + '</div></div>';
   }
 
-  const n = history.length, first = history[0].v, last = history[n - 1].v, change = last - first;
+  const n = history.length, first = history[0].v, last = history[n - 1].v;
+  // Measure gain/loss against total cost basis (matches the per-holding badges).
+  // Fall back to the period's first value if no cost basis is set anywhere.
+  const totalCost = investmentsCostChf();
+  const baseline = totalCost > 0 ? totalCost : first;
+  const change = last - baseline;
   const dir = invDirOf(change), color = dir === 'up' ? 'var(--pos)' : dir === 'down' ? 'var(--neg)' : 'var(--muted)';
   const vals = history.map(p => p.v), ts = history.map(p => p.t);
-  const minV = Math.min.apply(null, vals), maxV = Math.max.apply(null, vals), range = (maxV - minV) || Math.max(1, Math.abs(maxV));
-  const pts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: H - PAD - ((p.v - minV) / range) * (H - PAD * 2) }));
+  // Include the baseline in the y-domain so the cost line is always on-chart.
+  const domMin = Math.min(Math.min.apply(null, vals), baseline), domMax = Math.max(Math.max.apply(null, vals), baseline);
+  const range = (domMax - domMin) || Math.max(1, Math.abs(domMax));
+  const yOf = v => H - PAD - ((v - domMin) / range) * (H - PAD * 2);
+  const pts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: yOf(p.v) }));
   const lineD = smoothPath(pts), lp = pts[n - 1], fp = pts[0];
   const areaD = lineD + ' L' + lp.x + ',' + H + ' L' + fp.x + ',' + H + ' Z';
+  const yCost = yOf(baseline);
+  const costLine = totalCost > 0 ? '<line class="invCostLine" x1="0" x2="' + W + '" y1="' + yCost.toFixed(1) + '" y2="' + yCost.toFixed(1) + '"/>' : '';
+  const costLabel = totalCost > 0 ? '<div class="invCostLabel" style="top:' + ((yCost / H) * 100).toFixed(1) + '%">cost</div>' : '';
 
-  invChartState = { ts: ts, vals: vals, first: first, xPct: pts.map(p => (p.x / W) * 100), yPct: pts.map(p => (p.y / H) * 100) };
+  invChartState = { ts: ts, vals: vals, first: baseline, xPct: pts.map(p => (p.x / W) * 100), yPct: pts.map(p => (p.y / H) * 100) };
 
   const axisIdx = n <= 4 ? history.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1];
   const axis = axisIdx.map(i => '<span>' + esc(fmtChartDate(ts[i])) + '</span>').join('');
 
   return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft"><span class="chartLabel">Investments</span>'
     + '<span class="invReadVal" id="invReadVal">' + esc(fmt(last)) + '</span>'
-    + '<span class="invReadDelta ' + dir + '" id="invReadDelta">' + esc(invDeltaStr(first, last)) + '</span></div>' + periodToggle + '</div>'
+    + '<span class="invReadDelta ' + dir + '" id="invReadDelta" title="' + (totalCost > 0 ? 'Gain/loss vs your cost basis' : 'Change over the selected period') + '">' + esc(invDeltaStr(baseline, last)) + '</span></div>' + periodToggle + '</div>'
     + '<div class="invChartStage" data-invchart>'
     + '<svg class="chartSvg invChartSvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden style="color:' + color + '">'
     + '<defs><linearGradient id="invGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.5"/><stop offset="60%" stop-color="currentColor" stop-opacity="0.16"/><stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>'
     + '<line class="chartGrid" x1="0" x2="' + W + '" y1="50" y2="50"/><line class="chartGrid" x1="0" x2="' + W + '" y1="100" y2="100"/><line class="chartGrid" x1="0" x2="' + W + '" y1="150" y2="150"/>'
+    + costLine
     + '<path d="' + areaD + '" fill="url(#invGrad)"/><path d="' + lineD + '" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" class="chartLineStroke"/></svg>'
+    + costLabel
     + '<div class="invCrosshair" id="invCrosshair"></div><div class="invDot" id="invDot"></div><div class="invTip" id="invTip"></div>'
     + '</div><div class="invXAxis">' + axis + '</div>'
     + '<div class="invChartFoot">' + invHistBtnHtml('↻ Reload price history') + '</div></div>';
