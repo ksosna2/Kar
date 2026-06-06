@@ -319,6 +319,28 @@ body {
 .invChartFoot { display:flex; justify-content:flex-end; margin-top: 8px; }
 .invCostLine { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 5; opacity: 0.55; }
 .invCostLabel { position:absolute; right: 6px; transform: translateY(-50%); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); opacity: 0.75; pointer-events: none; }
+/* Stock news */
+.newsLegend { display:flex; flex-wrap:wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
+.newsChip { display:inline-flex; align-items:center; gap: 8px; padding: 7px 12px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--border); cursor: pointer; font-family: var(--font-ui); transition: border-color var(--duration) var(--ease-premium), background var(--duration) var(--ease-premium); }
+.newsChip:hover { border-color: var(--border-strong); }
+.newsChip.active { border-color: var(--nc); background: color-mix(in srgb, var(--nc) 12%, transparent); }
+.newsDot { width: 9px; height: 9px; border-radius: 50%; background: var(--nc); flex-shrink:0; }
+.newsChipTicker { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--fg); }
+.newsChipName { font-size: 12px; color: var(--muted-strong); max-width: 150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.newsChipCount { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.newsBar { display:flex; align-items:center; justify-content:space-between; gap: var(--space-3); padding: 0 2px 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.newsUpdated { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.newsList { display:flex; flex-direction:column; }
+.newsItem { display:flex; align-items:flex-start; gap: var(--space-3); padding: 13px 6px; border-bottom: 1px solid var(--border); transition: background var(--duration) var(--ease-premium); }
+.newsItem:hover { background: var(--surface-2); }
+.newsTag { flex-shrink:0; font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; padding: 3px 8px; border-radius: var(--radius-pill); border: 1px solid transparent; text-transform: uppercase; margin-top: 1px; }
+.newsBody { display:flex; flex-direction:column; gap: 4px; min-width: 0; }
+.newsTitle { font-size: 0.97rem; line-height: 1.4; color: var(--fg); }
+.newsItem:hover .newsTitle { color: var(--brand-2); }
+.newsMeta { display:flex; align-items:center; gap: 7px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.newsSrc { color: var(--muted-strong); }
+.newsMetaSep { opacity: 0.5; }
+.newsEmpty { text-align:center; color: var(--muted); font-size: var(--text-sm); padding: var(--space-10) 0; }
 
 /* Donut */
 .donutStage { position: relative; display:flex; align-items:center; justify-content:center; margin: var(--space-3) 0; }
@@ -583,8 +605,8 @@ const STORAGE_KEY = 'finance_standalone_v1';
 const ACTIVITY_MAX = 50;
 const NW_HISTORY_MAX = 500;
 const CURRENCIES = ['PLN', 'EUR', 'USD'];
-const TAB_KEYS = ['net', 'subs', 'orders', 'wish'];
-const TAB_LABELS = { net: 'net worth', subs: 'subs', orders: 'orders', wish: 'wishlist' };
+const TAB_KEYS = ['net', 'subs', 'orders', 'wish', 'news'];
+const TAB_LABELS = { net: 'net worth', subs: 'subs', orders: 'orders', wish: 'wishlist', news: 'stock news' };
 const DEFAULT_RATES = { CHF: 1, USD: 1, EUR: 1, GBP: 1, PLN: 1 };
 
 function genId(prefix) { return (prefix || 'id') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
@@ -685,11 +707,20 @@ function loadSettings() {
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} }
 let settings = loadSettings();
 
+/* ---- Stock news cache (kept out of the synced state — local only) ---- */
+const NEWS_KEY = 'finance_news_v1';
+const NEWS_TTL = 30 * 60 * 1000; // refresh a symbol's news at most every 30 min
+function loadNews() { try { return JSON.parse(localStorage.getItem(NEWS_KEY) || '{}') || {}; } catch { return {}; } }
+function saveNews() { try { localStorage.setItem(NEWS_KEY, JSON.stringify(newsCache)); } catch {} }
+let newsCache = loadNews();   // { SYMBOL: { fetchedAt, name, lang, items:[{title,link,source,published}] } }
+
 /* UI session state (not persisted) */
 const ui = {
   chartPeriod: 'ALL',
   invChartPeriod: 'ALL',
   invHistBusy: false,
+  newsBusy: false,
+  newsFilter: null,  // when set, the stock-news feed shows only this ticker
   holdingId: null,   // id of the holding whose detail pop-up is open
   show: {},          // bankAdd, cryptoAdd, otherAdd, stocksAdd, stocksManual
   edit: null,        // { id, field:'name'|'amt'|'shares' }
@@ -738,7 +769,7 @@ function pushActivity(entry) {
  * ============================================================ */
 const actions = {
   setCurrency(c) { state.currency = c; save(); render(); },
-  setActiveTab(t) { state.activeTab = t; save(); render(); },
+  setActiveTab(t) { state.activeTab = t; save(); render(); if (t === 'news') loadStockNews(false); },
 
   addAccount(type, name, displayAmount) {
     const trimmed = name.trim(); if (!trimmed || !isFinite(displayAmount)) return;
@@ -1825,10 +1856,106 @@ async function runImport(kind, file) {
 /* ============================================================
  * Render
  * ============================================================ */
+/* ============================================================
+ * STOCK NEWS view
+ * ============================================================ */
+const NEWS_COLORS = ['#A7C0D7', '#BFA23E', '#74B49B', '#CF7A6B', '#9B8BD0', '#E0B05A', '#6FB1C9', '#C98BB0'];
+function uniqueNewsSymbols() {
+  const seen = [];
+  state.accounts.forEach(a => { if (a.type === 'stocks' && a.ticker && seen.indexOf(a.ticker) < 0) seen.push(a.ticker); });
+  return seen;
+}
+function newsColorFor(symbol) {
+  const i = uniqueNewsSymbols().indexOf(symbol);
+  return NEWS_COLORS[(i < 0 ? 0 : i) % NEWS_COLORS.length];
+}
+function newsRelTime(ms) {
+  if (!ms) return '';
+  const s = (Date.now() - ms) / 1000;
+  if (s < 90) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  const d = Math.round(s / 86400);
+  if (d < 30) return d + 'd ago';
+  return new Date(ms).toLocaleDateString();
+}
+
+// Fetch news per holding from /api/news (Google News RSS, language per listing).
+// Only refetches symbols whose cache is older than NEWS_TTL unless force=true.
+async function loadStockNews(force) {
+  const syms = uniqueNewsSymbols();
+  if (!syms.length) return;
+  const due = syms.filter(s => force || !newsCache[s] || (Date.now() - (newsCache[s].fetchedAt || 0) > NEWS_TTL));
+  if (!due.length) return;
+  ui.newsBusy = true; if (state.activeTab === 'news') render();
+  await Promise.all(due.map(async s => {
+    try {
+      const r = await fetch('/api/news?symbol=' + encodeURIComponent(s));
+      const j = await r.json();
+      if (j && j.ok && Array.isArray(j.items)) {
+        newsCache[s] = { fetchedAt: Date.now(), name: j.name || s, lang: j.lang || 'en', items: j.items.slice(0, 30) };
+      } else {
+        newsCache[s] = newsCache[s] || { fetchedAt: 0, name: s, lang: 'en', items: [] };
+        newsCache[s].fetchedAt = Date.now(); // back off on failure
+      }
+    } catch (e) {
+      newsCache[s] = newsCache[s] || { fetchedAt: 0, name: s, lang: 'en', items: [] };
+      newsCache[s].fetchedAt = Date.now();
+    }
+  }));
+  ui.newsBusy = false; saveNews(); if (state.activeTab === 'news') render();
+}
+
+function newsViewHtml() {
+  const head = '<section class="section"><div class="sectionEyebrow"><span>Stock news</span></div>';
+  const syms = uniqueNewsSymbols();
+  if (!syms.length) {
+    return head + '<div class="newsEmpty">Add a stock holding and its news will be tracked here.</div></section>';
+  }
+  const legend = syms.map(s => {
+    const c = newsColorFor(s), e = newsCache[s];
+    const name = e && e.name ? e.name : s, count = e && e.items ? e.items.length : 0;
+    const langTag = e && e.lang === 'pl' ? ' · PL' : '';
+    const active = ui.newsFilter === s;
+    return '<button type="button" class="newsChip' + (active ? ' active' : '') + '" data-act="newsFilter" data-sym="' + esc(s) + '" style="--nc:' + c + '">'
+      + '<span class="newsDot"></span><span class="newsChipTicker">' + esc(s) + '</span><span class="newsChipName">' + esc(name) + '</span>'
+      + '<span class="newsChipCount">' + count + langTag + '</span></button>';
+  }).join('');
+  let items = [];
+  syms.forEach(s => { const e = newsCache[s]; if (e && e.items) e.items.forEach(it => items.push(Object.assign({ sym: s }, it))); });
+  if (ui.newsFilter) items = items.filter(it => it.sym === ui.newsFilter);
+  items.sort((a, b) => (b.published || 0) - (a.published || 0));
+  const anyLoaded = syms.some(s => newsCache[s]);
+  const refreshBtn = '<button type="button" class="linkAction" data-act="refreshNews"' + (ui.newsBusy ? ' disabled' : '') + '>' + (ui.newsBusy ? 'updating…' : '↻ refresh news') + '</button>';
+  let body;
+  if (!anyLoaded) {
+    body = '<div class="newsEmpty">' + (ui.newsBusy ? 'Scraping the latest headlines…' : 'Tap refresh to pull the latest headlines.') + '</div>';
+  } else if (!items.length) {
+    body = '<div class="newsEmpty">No recent news' + (ui.newsFilter ? ' for ' + esc(ui.newsFilter) : '') + '.</div>';
+  } else {
+    body = '<div class="newsList">' + items.map(it => {
+      const c = newsColorFor(it.sym);
+      const src = it.source ? '<span class="newsSrc">' + esc(it.source) + '</span>' : '';
+      const when = it.published ? '<span class="newsWhen">' + esc(newsRelTime(it.published)) + '</span>' : '';
+      const sep = (src && when) ? '<span class="newsMetaSep">·</span>' : '';
+      return '<a class="newsItem" href="' + esc(it.link) + '" target="_blank" rel="noopener">'
+        + '<span class="newsTag" style="background:' + c + '22; color:' + c + '; border-color:' + c + '66">' + esc(it.sym) + '</span>'
+        + '<span class="newsBody"><span class="newsTitle">' + esc(it.title) + '</span><span class="newsMeta">' + src + sep + when + '</span></span></a>';
+    }).join('') + '</div>';
+  }
+  const lastFetched = Math.max.apply(null, syms.map(s => (newsCache[s] && newsCache[s].fetchedAt) || 0));
+  const updatedStr = lastFetched ? 'Updated ' + newsRelTime(lastFetched) : 'Not loaded yet';
+  return head
+    + '<div class="newsLegend">' + legend + '</div>'
+    + '<div class="newsBar"><span class="newsUpdated">' + esc(updatedStr) + '</span>' + refreshBtn + '</div>'
+    + body + '</section>';
+}
+
 function viewHtml() {
   if (state.activeTab === 'net') return netWorthViewHtml();
   if (state.activeTab === 'subs') return subsViewHtml();
   if (state.activeTab === 'orders') return ordersViewHtml();
+  if (state.activeTab === 'news') return newsViewHtml();
   return wishViewHtml();
 }
 function tabBarHtml() {
@@ -1988,6 +2115,8 @@ document.addEventListener('click', e => {
     case 'chartPeriod': ui.chartPeriod = btn.dataset.p; render(); break;
     case 'invChartPeriod': ui.invChartPeriod = btn.dataset.p; render(); break;
     case 'loadInvHistory': loadInvestmentsHistory(); break;
+    case 'refreshNews': loadStockNews(true); break;
+    case 'newsFilter': ui.newsFilter = (ui.newsFilter === btn.dataset.sym) ? null : btn.dataset.sym; render(); break;
     case 'showAdd': ui.show[btn.dataset.show] = true; render(); break;
     case 'refreshPrices': refreshStockPrices(); break;
     case 'openSettings': openSettings(); break;
@@ -2095,6 +2224,10 @@ fetch('https://open.er-api.com/v6/latest/CHF')
   .catch(() => {});
 
 applyTheme(currentTheme);
+
+// Stock news: load on boot if that tab is open, and keep it fresh while viewing.
+if (state.activeTab === 'news') loadStockNews(false);
+setInterval(function () { if (state.activeTab === 'news' && navigator.onLine !== false) loadStockNews(false); }, 20 * 60 * 1000);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="db.js?v=15"></script>
