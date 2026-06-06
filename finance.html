@@ -337,6 +337,7 @@ body {
 .holdingShares:hover { background: var(--brand-soft); }
 .holdingSharesInput { width: 64px; text-align:right; }
 .holdingPrice { display:inline-flex; align-items:baseline; gap: 6px; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.holdingPriceNative { color: var(--muted); opacity: 0.7; font-size: 11px; }
 .holdingsFooter { display:flex; justify-content:space-between; align-items:center; gap: var(--space-3); padding: 6px 2px 0; }
 .linkAction { background: transparent; border:0; padding: 4px 0; color: var(--muted-strong); font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.01em; cursor: pointer; transition: color var(--duration) var(--ease-premium); }
 .linkAction:hover { color: var(--brand); }
@@ -673,8 +674,8 @@ const actions = {
   },
   addHolding(ticker, shares) {
     const t = ticker.trim().toUpperCase(); if (!t || !isFinite(shares) || shares <= 0) return;
-    // No live price source in the standalone — value stays 0 until you switch
-    // to a manual entry or use the hosted app. Shown as "—".
+    // Value stays 0 (shown as "—") until the next ↻ refresh prices fetches a live
+    // quote from /api/quote. Use an exchange suffix for non-US listings (NESN.SW…).
     state.accounts.push({ id: genId('acc'), type: 'stocks', name: t, ticker: t, shares, amountCHF: 0 });
     save(); render();
   },
@@ -983,12 +984,19 @@ function holdingRowHtml(acct) {
     ? '<input class="inlineEditInput holdingSharesInput" id="edit-shares-' + acct.id + '" type="number" step="0.0001" value="' + esc(String(acct.shares || 0)) + '" data-edit="shares" data-id="' + acct.id + '" />'
     : '<span class="holdingShares" data-act="editShares" data-id="' + acct.id + '" title="Tap to edit share count">' + (acct.shares || 0) + ' sh</span>';
   const hasPrice = typeof acct.lastPriceChf === 'number' && isFinite(acct.lastPriceChf);
+  // Show the native quote (e.g. GBP 245.10) alongside the converted base value,
+  // unless the listing already trades in the user's display currency.
+  const nativeStr = (hasPrice && acct.lastCurrency && acct.lastPrice != null && acct.lastCurrency !== state.currency)
+    ? acct.lastCurrency + ' ' + Number(acct.lastPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })
+    : '';
   const priceCell = hasPrice
-    ? '<span class="holdingPrice" title="Live price · ' + (acct.lastPriceAt ? new Date(acct.lastPriceAt).toLocaleString() : '') + '">' + esc(fmt(acct.lastPriceChf)) + '</span>'
-    : '<span class="holdingPrice" title="Add a Finnhub key in ⚙ settings, then ↻ refresh prices">—</span>';
+    ? '<span class="holdingPrice" title="Live price' + (acct.lastPriceAt ? ' · ' + new Date(acct.lastPriceAt).toLocaleString() : '') + '">'
+      + (nativeStr ? '<span class="holdingPriceNative">' + esc(nativeStr) + '</span>' : '')
+      + esc(fmt(acct.lastPriceChf)) + '</span>'
+    : '<span class="holdingPrice" title="Tap ↻ refresh prices for a live quote">—</span>';
   const amtCell = hasPrice
     ? '<span class="accountRowAmount" title="shares × live price">' + esc(fmt(acct.amountCHF)) + '</span>'
-    : '<span class="accountRowAmount" title="Add a Finnhub key in ⚙ settings, then ↻ refresh prices">—</span>';
+    : '<span class="accountRowAmount" title="Tap ↻ refresh prices for a live quote">—</span>';
   return '<div class="holdingRow"><span class="tickerPill">' + esc(acct.ticker) + '</span>' + sharesCell
     + priceCell + amtCell
     + '<button type="button" class="deleteBtn" data-act="delAccount" data-id="' + acct.id + '" title="Delete">×</button></div>';
@@ -1003,7 +1011,7 @@ function stocksCardHtml(netWorth) {
   const showManual = ui.show.stocksManual !== undefined ? ui.show.stocksManual : (manuals.length > 0);
   const dh = ui.drafts.stockHold, dm = ui.drafts.stockManual;
   const addHold = showAdd
-    ? '<div class="quickAdd"><input class="quickAddInput" type="text" placeholder="Ticker (e.g. VTI)" spellcheck="false" value="' + esc(dh.ticker) + '" data-draft="stockHold.ticker" data-upper="1" data-enter="addHolding" />'
+    ? '<div class="quickAdd"><input class="quickAddInput" type="text" placeholder="Ticker (e.g. VTI · NESN.SW)" spellcheck="false" value="' + esc(dh.ticker) + '" data-draft="stockHold.ticker" data-upper="1" data-enter="addHolding" />'
       + '<input class="quickAddInput" type="number" step="0.0001" placeholder="Shares" value="' + esc(dh.shares) + '" data-draft="stockHold.shares" data-enter="addHolding" />'
       + '<button type="button" class="quickAddBtn" data-act="addHolding">+</button></div>'
     : '<button type="button" class="addToggle" data-act="showAdd" data-show="stocksAdd">+ add holding</button>';
@@ -1016,7 +1024,7 @@ function stocksCardHtml(netWorth) {
     + '<span class="accountTotal">' + esc(fmt(total)) + (pct != null ? '<span class="accountTotalPct">· ' + pct.toFixed(1) + '%</span>' : '') + '</span></div>'
     + '<div class="accountList">' + holdings.map(holdingRowHtml).join('') + manuals.map(accountRowHtml).join('') + '</div>'
     + addHold
-    + '<div class="holdingsFooter"><button type="button" class="linkAction" data-act="refreshPrices" title="Fetch live quotes from Finnhub (add your key in ⚙ settings)"' + (ui.pricesBusy ? ' disabled' : '') + '>' + (ui.pricesBusy ? '↻ refreshing…' : '↻ refresh prices') + '</button>'
+    + '<div class="holdingsFooter"><button type="button" class="linkAction" data-act="refreshPrices" title="Fetch live quotes (US + international — use an exchange suffix like NESN.SW, VOD.L, SAP.DE)"' + (ui.pricesBusy ? ' disabled' : '') + '>' + (ui.pricesBusy ? '↻ refreshing…' : '↻ refresh prices') + '</button>'
     + (showManual ? '' : '<button type="button" class="linkAction" data-act="showAdd" data-show="stocksManual">+ add manual entry</button>') + '</div>'
     + manualBlock + '</div>';
 }
@@ -1305,7 +1313,7 @@ function renderModal() {
 }
 
 function settingsModalHtml() {
-  const fSet = !!settings.finnhubKey, aSet = !!settings.anthropicKey;
+  const aSet = !!settings.anthropicKey;
   function field(id, label, set, value, type, placeholder, hint) {
     return '<div class="fieldGroup"><div class="fieldLabelRow"><span class="fieldLabel">' + label + '</span>'
       + '<span class="keyStatus ' + (set ? 'set' : 'unset') + '">' + (set ? 'set' : 'not set') + '</span></div>'
@@ -1314,8 +1322,7 @@ function settingsModalHtml() {
   }
   return '<div class="importOverlay" data-act="closeSettings"><div class="importPanel" data-stop="1">'
     + '<div class="importHead"><div><div class="importEyebrow">Settings</div><h2 class="importTitle">API <em>keys</em></h2></div><button type="button" class="importClose" data-act="closeSettings">×</button></div>'
-    + '<p class="importDesc">Add your own keys to unlock live stock prices and AI screenshot import. Keys are stored only in this browser and sent directly from your device to Finnhub / Anthropic — never to any other server.</p>'
-    + field('settings-finnhub', 'Finnhub key · live stock prices', fSet, settings.finnhubKey, 'password', 'paste your Finnhub API key', 'Free key at <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io/register</a>. Powers the holdings ↻ refresh prices button (US-listed symbols).')
+    + '<p class="importDesc">Live stock prices (US + international) work out of the box — no key needed. Add an Anthropic key to unlock AI screenshot import. Keys are stored only in this browser and sent directly from your device to Anthropic — never to any other server.</p>'
     + field('settings-anthropic', 'Anthropic key · AI screenshot import', aSet, settings.anthropicKey, 'password', 'paste your Anthropic API key (sk-ant-…)', 'Key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Powers reading statements / subs / receipts from a screenshot.')
     + field('settings-model', 'Anthropic model', !!settings.anthropicModel, settings.anthropicModel, 'text', DEFAULT_MODEL, 'Vision-capable model used for import. Change it if your account uses a different model id.')
     + '<div class="settingsActions"><button type="button" class="ghostBtn" data-act="closeSettings">Cancel</button><button type="button" class="quickAddBtn" style="height:38px" data-act="saveSettings">Save keys</button></div>'
@@ -1348,23 +1355,31 @@ function importModalHtml() {
 }
 
 /* ============================================================
- * Live stock prices (Finnhub) — called from the holdings card
+ * Live stock prices (Yahoo via /api/quote) — called from the holdings card
  * ============================================================ */
 async function refreshStockPrices(opts) {
   opts = opts || {};
   const holdings = state.accounts.filter(a => a.type === 'stocks' && a.ticker);
-  if (!settings.finnhubKey) { if (!opts.silent) openSettings(); return; }
   if (!holdings.length) { if (!opts.silent) alert('Add a stock holding (with a ticker) first.'); return; }
   ui.pricesBusy = true; if (!opts.silent) render();
-  let ok = 0; const failed = [];
+  let ok = 0; const failed = []; const noRate = [];
   await Promise.all(holdings.map(async a => {
     try {
-      const r = await fetch('https://finnhub.io/api/v1/quote?symbol=' + encodeURIComponent(a.ticker) + '&token=' + encodeURIComponent(settings.finnhubKey));
+      const r = await fetch('/api/quote?symbol=' + encodeURIComponent(a.ticker));
       const j = await r.json();
-      const price = Number(j && j.c);
-      // Finnhub quotes US-listed symbols in USD; convert USD → CHF (our base).
-      if (!price || !isFinite(price)) { failed.push(a.ticker); return; }
-      const priceChf = price / (rates.USD || 1);
+      if (!j || !j.ok || !isFinite(Number(j.price))) { failed.push(a.ticker); return; }
+      // Yahoo returns the price in the listing's native currency. Normalise
+      // minor-unit quotes (London pence GBp/GBX, ZA cents, IL agorot) to the
+      // major unit, then convert native → CHF (our base) via the FX feed.
+      let price = Number(j.price), ccy = String(j.currency || 'USD');
+      if (/^gb[xp]$/i.test(ccy)) { price /= 100; ccy = 'GBP'; }
+      else if (/^zac$/i.test(ccy)) { price /= 100; ccy = 'ZAR'; }
+      else if (/^ila[c]?$/i.test(ccy)) { price /= 100; ccy = 'ILS'; }
+      else ccy = ccy.toUpperCase();
+      const rate = rates[ccy];
+      if (!rate) { noRate.push(a.ticker + ' (' + ccy + ')'); return; }
+      const priceChf = price / rate;
+      a.lastPrice = price; a.lastCurrency = ccy;
       a.lastPriceChf = priceChf; a.lastPriceAt = Date.now();
       a.amountCHF = (Number(a.shares) || 0) * priceChf;
       ok++;
@@ -1372,8 +1387,11 @@ async function refreshStockPrices(opts) {
   }));
   ui.pricesBusy = false;
   maybeSnapshotNw(); save(); render();
-  if (!opts.silent && failed.length) {
-    alert('Updated ' + ok + ' holding' + (ok === 1 ? '' : 's') + '. Could not price: ' + failed.join(', ') + '.\n\nFinnhub\'s free tier covers US-listed symbols. Check the ticker and that your key is valid.');
+  if (!opts.silent && (failed.length || noRate.length)) {
+    let msg = 'Updated ' + ok + ' holding' + (ok === 1 ? '' : 's') + '.';
+    if (failed.length) msg += '\n\nCould not price: ' + failed.join(', ') + '.\nInternational listings need an exchange suffix — e.g. NESN.SW (Swiss), VOD.L (London), SAP.DE (Frankfurt), 7203.T (Tokyo).';
+    if (noRate.length) msg += '\n\nNo FX rate for: ' + noRate.join(', ') + '. That currency isn’t in the daily rate feed.';
+    alert(msg);
   }
 }
 
@@ -1619,10 +1637,8 @@ document.addEventListener('click', e => {
     case 'openSettings': openSettings(); break;
     case 'closeSettings': if (!stop || e.target.closest('.importClose')) { ui.settingsOpen = false; renderModal(); } break;
     case 'saveSettings': {
-      const fk = document.getElementById('settings-finnhub');
       const ak = document.getElementById('settings-anthropic');
       const mk = document.getElementById('settings-model');
-      settings.finnhubKey = fk ? fk.value.trim() : settings.finnhubKey;
       settings.anthropicKey = ak ? ak.value.trim() : settings.anthropicKey;
       settings.anthropicModel = (mk && mk.value.trim()) || DEFAULT_MODEL;
       saveSettings(); ui.settingsOpen = false; renderModal();
@@ -1703,10 +1719,12 @@ fetch('https://open.er-api.com/v6/latest/CHF')
   .then(r => r.json())
   .then(data => {
     if (data && data.rates) {
-      rates = { CHF: 1, USD: data.rates.USD || 1, EUR: data.rates.EUR || 1, GBP: data.rates.GBP || 1 };
+      // Keep the full rate map (CHF base) so any listing currency — JPY, CAD,
+      // SEK, HKD, … — can be converted, not just the four display currencies.
+      rates = Object.assign({ CHF: 1 }, data.rates);
       render();
-      // Now that USD→CHF is known, refresh live holdings prices if a key is set.
-      if (settings.finnhubKey && state.accounts.some(a => a.type === 'stocks' && a.ticker)) refreshStockPrices({ silent: true });
+      // Now that the FX feed is in, price any live holdings (no key needed).
+      if (state.accounts.some(a => a.type === 'stocks' && a.ticker)) refreshStockPrices({ silent: true });
     }
   })
   .catch(() => {});
