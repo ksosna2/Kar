@@ -1570,10 +1570,10 @@ img, video, canvas, svg { max-width: 100%; }
 
     <!-- Log a set -->
     <div class="po-sub-section">
-      <div class="po-sub-title">Log today's top set</div>
+      <div class="po-sub-title">Log every set — coach finds your top set</div>
       <div class="po-bw-banner" id="bwBanner">Bodyweight — log reps only</div>
       <div class="po-last-set" id="lastSet">
-        <span class="po-last-label">Last time</span>
+        <span class="po-last-label">Last top set</span>
         <span class="po-last-value" id="lastSetValue"></span>
         <span class="po-last-meta" id="lastSetMeta"></span>
       </div>
@@ -1873,6 +1873,23 @@ img, video, canvas, svg { max-width: 100%; }
   function gymName(id) { const g = state.gyms.find(x => x.id === id); return g ? g.name : id; }
   function dayName(id) { const d = state.days.find(x => x.id === id); return d ? d.name : id; }
   function estimate1RM(w, r) { if (r < 2) return w; return w * (1 + r / 30); }
+  // The "top set" of a session = best by estimated 1RM (weighted) or most reps
+  // (bodyweight). This is what the coach progresses off, auto-detected from all
+  // the sets you log that day.
+  function topSetOf(ex, sets) {
+    let top = sets[0];
+    for (const s of sets) {
+      if (ex.bw) { if ((s.reps || 0) > (top.reps || 0)) top = s; }
+      else { const a = estimate1RM(s.weight || 0, s.reps || 0), b = estimate1RM(top.weight || 0, top.reps || 0); if (a > b || (a === b && (s.weight || 0) > (top.weight || 0))) top = s; }
+    }
+    return top;
+  }
+  // One top-set per session (calendar day), oldest → newest.
+  function sessionTopSets(ex, logs) {
+    const byDay = {};
+    logs.forEach(l => { const k = (l.date || '').slice(0, 10); (byDay[k] || (byDay[k] = [])).push(l); });
+    return Object.keys(byDay).sort().map(k => { const t = topSetOf(ex, byDay[k]); return { date: k, weight: t.weight || 0, reps: t.reps || 0, sets: byDay[k].length }; });
+  }
   function roundToStep(v, s) { return Math.round(v / s) * s; }
   function getFiltered() {
     return state.exercises.filter(e =>
@@ -1894,13 +1911,16 @@ img, video, canvas, svg { max-width: 100%; }
   // out 12 reps before adding weight.
   function getRx(ex, logs) {
     if (!logs.length) return null;
-    const last = logs[logs.length - 1];
+    // Progress off the TOP set of each session (auto-detected), not the last
+    // set logged — so logging back-off / warm-up sets never derails the coach.
+    const tops = sessionTopSets(ex, logs);
+    const last = tops[tops.length - 1];
     const { weight, reps } = last;
     const { repMin, repMax, step, bw } = ex;
     const upgradeAt = Math.min(CONFIG.upgradeAtReps || 8, repMax);
     let stuck = 0;
-    for (let i = logs.length - 1; i >= 0; i--) {
-      if (logs[i].weight === weight) stuck++; else break;
+    for (let i = tops.length - 1; i >= 0; i--) {
+      if (tops[i].weight === weight) stuck++; else break;
     }
     if (bw) {
       if (reps >= upgradeAt) return { type: 'up', weight: 0, reps: reps + 1, tag: 'Push for more', reason: reps + ' reps — strong. Push for ' + (reps + 1) + ' next time.', bw: true };
@@ -1986,13 +2006,15 @@ img, video, canvas, svg { max-width: 100%; }
     const ex = getCurrentEx();
     const logs = ex ? getLogs() : [];
     if (!ex || !logs.length) { wrap.classList.remove('show'); return; }
-    const last = logs[logs.length - 1];
+    const tops = sessionTopSets(ex, logs);
+    const last = tops[tops.length - 1];
     const setStr = ex.bw ? (last.reps + ' reps') : (last.weight + unit() + ' × ' + last.reps);
-    const d = new Date(last.date);
+    const p = last.date.split('-').map(Number);
+    const d = new Date(p[0], p[1] - 1, p[2]);
     const da = Math.floor((Date.now() - d.getTime()) / 86400000);
-    const ago = da === 0 ? 'today' : da === 1 ? 'yesterday' : da + ' days ago';
+    const ago = da <= 0 ? 'today' : da === 1 ? 'yesterday' : da + ' days ago';
     v.textContent = setStr;
-    m.textContent = ago;
+    m.textContent = 'top set · ' + ago + (last.sets > 1 ? ' · ' + last.sets + ' sets' : '');
     wrap.classList.add('show');
   }
   function renderRx() {
@@ -2040,19 +2062,19 @@ img, video, canvas, svg { max-width: 100%; }
       if (cur > bestVal) best = l;
     });
     $('bestSet').textContent = ex.bw ? (best.reps + 'r') : (best.weight + '×' + best.reps);
-    $('sessionCount').textContent = logs.length;
+    $('sessionCount').textContent = sessionTopSets(ex, logs).length;
   }
   function renderSparkline() {
     const svg = $('sparkline');
     const empty = $('sparkEmpty');
     const ex = getCurrentEx();
-    const logs = ex ? getLogs().slice(-10) : [];
-    if (logs.length < 2) {
+    const tops = ex ? sessionTopSets(ex, getLogs()).slice(-10) : [];
+    if (tops.length < 2) {
       svg.style.display = 'none'; empty.style.display = 'block';
       return;
     }
     svg.style.display = 'block'; empty.style.display = 'none';
-    const vals = logs.map(l => ex.bw ? l.reps : estimate1RM(l.weight, l.reps));
+    const vals = tops.map(l => ex.bw ? l.reps : estimate1RM(l.weight, l.reps));
     const min = Math.min.apply(null, vals);
     const max = Math.max.apply(null, vals);
     const range = max - min || 1;
@@ -2179,11 +2201,14 @@ img, video, canvas, svg { max-width: 100%; }
     renderRx(); renderStats(); renderSparkline(); renderHistory();
     renderTodaysWorkout();
     renderPastWorkouts();
-    // Pre-fill weight input with last logged weight (or starting weight)
+    // Pre-fill weight with the coach's recommended weight (falls back to your
+    // last top set, then the exercise's starting weight).
     const ex = getCurrentEx();
     if (ex && !ex.bw) {
       const logs = getLogs();
-      const w = logs.length ? logs[logs.length - 1].weight : (ex.startWeight || 0);
+      const rx = getRx(ex, logs);
+      const tops = sessionTopSets(ex, logs);
+      const w = (rx && rx.weight) ? rx.weight : (tops.length ? tops[tops.length - 1].weight : (ex.startWeight || 0));
       $('weightInput').value = w;
     }
   }
@@ -2269,9 +2294,10 @@ img, video, canvas, svg { max-width: 100%; }
     } else {
       empty.classList.add('hidden');
       list.innerHTML = sum.perEx.map(e => {
+        const ts = topSetOf(e.ex, e.sets);
         const top = e.ex.bw
-          ? 'top ' + Math.max.apply(null, e.sets.map(s => s.reps)) + ' reps'
-          : 'top ' + Math.max.apply(null, e.sets.map(s => s.weight)) + u;
+          ? 'top ' + ts.reps + ' reps'
+          : 'top ' + ts.weight + u + ' × ' + ts.reps;
         const meta = e.ex.bw
           ? (e.sets.length + ' set' + (e.sets.length === 1 ? '' : 's') + ' · ' + top)
           : (e.sets.length + ' set' + (e.sets.length === 1 ? '' : 's') + ' · ' + top + ' · ' + Math.round(e.vol) + u + ' total');
