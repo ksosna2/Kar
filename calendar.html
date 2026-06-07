@@ -395,6 +395,7 @@ const CAL_TOOL = {
     title: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' },
     start: { type: 'string', description: '24h HH:MM, or empty for all-day' }, end: { type: 'string', description: '24h HH:MM, optional' },
     type: { type: 'string', enum: ['meeting', 'deadline', 'important'] }, location: { type: 'string' },
+    link: { type: 'string', description: 'The full join/meeting URL if present (Teams/Zoom/Meet/Webex), copied verbatim. Empty if none.' },
   }, required: ['title', 'date'] } } }, required: ['events'] },
 };
 async function importAiValue(text) {
@@ -408,7 +409,7 @@ async function importAiValue(text) {
       body: JSON.stringify({
         model: s.anthropicModel || DEFAULT_MODEL, max_tokens: 800, temperature: 0,
         tools: [CAL_TOOL], tool_choice: { type: 'tool', name: 'add_events' },
-        messages: [{ role: 'user', content: 'Today is ' + dateKey(new Date()) + ' (' + WD[(new Date().getDay() + 6) % 7] + '). Extract every calendar event from this text (usually an Outlook meeting). Resolve relative dates to YYYY-MM-DD. Use 24h HH:MM. Default type "meeting".\n\n' + text }],
+        messages: [{ role: 'user', content: 'Today is ' + dateKey(new Date()) + ' (' + WD[(new Date().getDay() + 6) % 7] + '). Extract every calendar event from this text (usually an Outlook meeting). Resolve relative dates to YYYY-MM-DD. Use 24h HH:MM. Default type "meeting". If a join/meeting URL is present (Teams/Zoom/Meet/Webex, e.g. https://teams.microsoft.com/l/meetup-join/...), copy it verbatim into "link".\n\n' + text }],
       }),
     });
     const j = await r.json();
