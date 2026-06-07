@@ -561,6 +561,13 @@ img, video, canvas, svg { max-width: 100%; }
 .po-rx-reason {
   margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2);
 }
+.po-rx-plan { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, rgba(255,255,255,0.1)); display:flex; flex-direction:column; gap:8px; }
+.po-rx-plan-h { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); margin-bottom: 2px; }
+.po-rx-set { display:flex; align-items:center; gap:10px; }
+.po-rx-set-n { font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color: var(--text-3); min-width:54px; }
+.po-rx-set-v { font-weight:600; font-size:15px; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.po-rx-set.is-top .po-rx-set-v, .po-rx-set.is-top .po-rx-set-n { color: var(--brand); }
+.po-rx-set-push { margin-left:auto; font-size:10px; letter-spacing:0.05em; text-transform:uppercase; color: var(--brand); background: var(--brand-soft, rgba(191,162,62,0.13)); border:1px solid var(--brand-line, rgba(191,162,62,0.3)); border-radius:999px; padding:2px 9px; }
 .po-rx-empty {
   font-size: 13px; color: var(--text-3); padding: 16px 0; text-align: center;
 }
@@ -2017,27 +2024,60 @@ img, video, canvas, svg { max-width: 100%; }
     m.textContent = 'top set · ' + ago + (last.sets > 1 ? ' · ' + last.sets + ' sets' : '');
     wrap.classList.add('show');
   }
+  // Full next-session plan: mirror last session's set structure (number of sets
+  // + weight ramp) and progress it so the TOP set lands on the recommendation.
+  function getWorkoutPlan(ex, logs) {
+    if (!logs.length) {
+      const w = ex.startWeight || 0;
+      const mk = (note, top) => ex.bw ? { reps: ex.repMin, note: note, top: top } : { weight: w, reps: ex.repMin, note: note, top: top };
+      return { fresh: true, rx: null, sets: [mk('', false), mk('', false), mk('push for max', true)] };
+    }
+    const byDay = {};
+    logs.forEach(l => { const k = (l.date || '').slice(0, 10); (byDay[k] || (byDay[k] = [])).push(l); });
+    const lastSets = byDay[Object.keys(byDay).sort().pop()];
+    const rx = getRx(ex, logs);
+    const prevTop = topSetOf(ex, lastSets);
+    const ramp = lastSets.slice().sort((a, b) => ex.bw ? ((a.reps || 0) - (b.reps || 0)) : (((a.weight || 0) - (b.weight || 0)) || ((a.reps || 0) - (b.reps || 0))));
+    const sets = ramp.map((s, i) => {
+      const isTop = i === ramp.length - 1;
+      if (ex.bw) return { reps: isTop ? rx.reps : (s.reps || ex.repMin), note: isTop ? 'push for ' + rx.reps + '+' : '', top: isTop };
+      const newW = isTop ? rx.weight : Math.max(ex.step || 1, roundToStep(rx.weight - ((prevTop.weight || 0) - (s.weight || 0)), ex.step || 1));
+      return { weight: newW, reps: isTop ? rx.reps : (s.reps || ex.repMin), note: isTop ? 'push for ' + rx.reps + '+' : '', top: isTop };
+    });
+    return { fresh: false, rx: rx, sets: sets };
+  }
+
   function renderRx() {
     const wrap = $('rxWrap');
     const ex = getCurrentEx();
     if (!ex) { wrap.innerHTML = '<div class="po-rx-empty">Pick a gym and day above.</div>'; return; }
     const logs = getLogs();
-    const rx = getRx(ex, logs);
+    const plan = getWorkoutPlan(ex, logs);
+    const rx = plan.rx;
+    let label, head, tag, tagCls, reason;
     if (!rx) {
-      const sw = ex.startWeight, sr = ex.repMin;
-      const head = ex.bw
-        ? '<span class="po-accent">' + sr + '</span> reps'
-        : '<span class="po-accent">' + (sw || 0) + unit() + '</span> × ' + sr + ' reps';
-      const reason = ex.bw
-        ? 'Aim for ' + ex.repMin + '-' + ex.repMax + ' clean reps. Once you hit ' + ex.repMax + '+, push for more.'
-        : 'Hit ' + ex.repMin + '-' + ex.repMax + ' reps. Once logged, the coach will start prescribing.';
-      wrap.innerHTML = '<div class="po-rx-card"><div class="po-rx-label">' + escape(ex.name) + ' · starting point</div><div class="po-rx-headline">' + head + '</div><span class="po-rx-tag hold">Start here</span><p class="po-rx-reason">' + reason + '</p></div>';
-      return;
+      label = escape(ex.name) + ' · starting point';
+      head = ex.bw ? ('<span class="po-accent">' + ex.repMin + '</span> reps') : ('<span class="po-accent">' + (ex.startWeight || 0) + unit() + '</span> × ' + ex.repMin + ' reps');
+      tag = 'Start here'; tagCls = 'hold';
+      reason = ex.bw ? ('Aim for ' + ex.repMin + '-' + ex.repMax + ' clean reps on the top set; the build-up sets ramp you in.') : ('Build to ' + ex.repMin + '-' + ex.repMax + ' reps on the top set. Lighter sets first, then push.');
+    } else {
+      label = escape(ex.name);
+      head = rx.bw ? ('<span class="po-accent">' + rx.reps + '</span> reps') : ('<span class="po-accent">' + rx.weight + unit() + '</span> × ' + rx.reps + ' reps');
+      tag = rx.tag; tagCls = rx.type; reason = rx.reason;
     }
-    const head = rx.bw
-      ? '<span class="po-accent">' + rx.reps + '</span> reps'
-      : '<span class="po-accent">' + rx.weight + unit() + '</span> × ' + rx.reps + ' reps';
-    wrap.innerHTML = '<div class="po-rx-card po-rx-' + rx.type + '"><div class="po-rx-label">' + escape(ex.name) + '</div><div class="po-rx-headline">' + head + '</div><span class="po-rx-tag ' + rx.type + '">' + rx.tag + '</span><p class="po-rx-reason">' + rx.reason + '</p></div>';
+    const planRows = plan.sets.map((s, i) => {
+      const wr = ex.bw ? (s.reps + ' reps') : (s.weight + unit() + ' × ' + s.reps);
+      const nm = s.top ? 'Top set' : ('Set ' + (i + 1));
+      const push = s.top ? '<span class="po-rx-set-push">' + escape(s.note || 'push') + '</span>' : '';
+      return '<div class="po-rx-set' + (s.top ? ' is-top' : '') + '"><span class="po-rx-set-n">' + nm + '</span><span class="po-rx-set-v">' + wr + '</span>' + push + '</div>';
+    }).join('');
+    wrap.innerHTML = '<div class="po-rx-card' + (rx ? ' po-rx-' + rx.type : '') + '">'
+      + '<div class="po-rx-label">' + label + '</div>'
+      + '<div class="po-rx-headline">' + head + '</div>'
+      + '<span class="po-rx-tag ' + tagCls + '">' + tag + '</span>'
+      + '<p class="po-rx-reason">' + reason + '</p>'
+      + '<div class="po-rx-plan"><div class="po-rx-plan-h">Suggested sets</div>' + planRows + '</div>'
+      + '</div>';
   }
   function renderStats() {
     const ex = getCurrentEx();
