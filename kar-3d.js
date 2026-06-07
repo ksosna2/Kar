@@ -225,6 +225,26 @@
     return g;
   };
 
+  /* 10 · CALENDAR — a glass card with a gold header bar + a date tile */
+  BUILD.calendar = function () {
+    var g = group();
+    var body = box(58, 46, 11, { r: 7, mat: "233,226,215" });
+    at(body, 0, 4, 0);
+    g.appendChild(body);
+    var header = box(58, 12, 11.4, { r: 6, mat: "191,162,62" });   // gold header band
+    at(header, 0, -15, 0);
+    g.appendChild(header);
+    [-16, 16].forEach(function (x) {                                 // binding rings
+      var ring = box(5, 9, 5, { r: 2.5, mat: "210,205,196", solid: true });
+      at(ring, x, -23, 0);
+      g.appendChild(ring);
+    });
+    var tile = box(14, 14, 3, { r: 3, mat: "167,192,215" });        // a highlighted day
+    at(tile, 11, 9, 6);
+    g.appendChild(tile);
+    return g;
+  };
+
   /* 9 · MACROS — three role-coloured rounded bars (split) */
   BUILD.macros = function () {
     var g = group();
