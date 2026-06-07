@@ -57,6 +57,9 @@
   .calEvent:hover { filter: brightness(1.12); }
   .calEvent .et { font-weight:600; font-size: 12px; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .calEvent .em { font-family: var(--font-mono); font-size: 10px; opacity:0.85; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .calEvent:has(.joinLink) .et { padding-right: 14px; }
+  .joinLink { position:absolute; top:3px; right:4px; font-size:12px; line-height:1; color:inherit; opacity:0.8; text-decoration:none; z-index:3; }
+  .joinLink:hover { opacity:1; }
   .ev-meeting   { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-2); }
   .ev-deadline  { background: var(--neg-soft);  border-color: var(--neg-line);  color: var(--neg); }
   .ev-important { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
@@ -209,6 +212,7 @@ function render() {
       const hgt = Math.max(20, (Math.max(en, s + 15) - s) / 60 * PXH - 2);
       const w = 100 / e._cols, left = e._col * w;
       col += '<div class="calEvent ev-' + e.type + '" data-edit="' + e.id + '" style="top:' + top.toFixed(1) + 'px;height:' + hgt.toFixed(1) + 'px;left:calc(' + left + '% + 1px);width:calc(' + w + '% - 3px)" title="' + esc(e.title + ' · ' + fmtTimeRange(e)) + '">'
+        + (e.link ? '<a class="joinLink" href="' + esc(e.link) + '" target="_blank" rel="noopener" title="Join meeting">↗</a>' : '')
         + '<div class="et">' + esc(e.title) + '</div><div class="em">' + esc(fmtTimeRange(e)) + (e.location ? ' · ' + esc(e.location) : '') + '</div></div>';
     });
     col += '</div>';
@@ -254,7 +258,7 @@ function renderModal() {
   const f = document.getElementById('evTitle'); if (f) f.focus();
 }
 
-function openEvent(ev) { ui.modal = { kind: 'event', ev: Object.assign({ id: '', title: '', date: dateKey(new Date()), start: '09:00', end: '', type: 'meeting', location: '', notes: '', allday: false }, ev || {}) }; renderModal(); }
+function openEvent(ev) { ui.modal = { kind: 'event', ev: Object.assign({ id: '', title: '', date: dateKey(new Date()), start: '09:00', end: '', type: 'meeting', location: '', notes: '', link: '', allday: false }, ev || {}) }; renderModal(); }
 function eventModalHtml() {
   const e = ui.modal.ev, isEdit = !!e.id;
   const typeSeg = TYPES.map(t => '<button type="button" class="typeBtn t-' + t.key + (e.type === t.key ? ' on' : '') + '" data-type="' + t.key + '">' + t.label + '</button>').join('');
@@ -266,7 +270,9 @@ function eventModalHtml() {
     + '<div class="fld"><label>&nbsp;</label><label class="chk"><input type="checkbox" id="evAllday"' + (e.allday ? ' checked' : '') + ' /> All-day</label></div></div>'
     + '<div class="row2" id="evTimes"' + (e.allday ? ' style="display:none"' : '') + '><div class="fld"><label>Start</label><input class="inp" id="evStart" type="time" value="' + esc(e.start || '09:00') + '" /></div>'
     + '<div class="fld"><label>End</label><input class="inp" id="evEnd" type="time" value="' + esc(e.end || '') + '" /></div></div>'
-    + '<div class="fld"><label>Location</label><input class="inp" id="evLoc" value="' + esc(e.location) + '" placeholder="Room / link (optional)" /></div>'
+    + '<div class="fld"><label>Location</label><input class="inp" id="evLoc" value="' + esc(e.location) + '" placeholder="Room (optional)" /></div>'
+    + '<div class="fld"><label>Meeting link</label><div style="display:flex;gap:8px"><input class="inp" id="evLink" value="' + esc(e.link) + '" placeholder="Teams / Zoom / Meet URL" />'
+    + (e.link ? '<a class="btn btn-ghost" href="' + esc(e.link) + '" target="_blank" rel="noopener" style="white-space:nowrap">Join ↗</a>' : '') + '</div></div>'
     + '<div class="fld"><label>Notes</label><textarea class="ta" id="evNotes" style="min-height:64px" placeholder="Optional">' + esc(e.notes) + '</textarea></div>'
     + '<div class="modalActions"><div>' + (isEdit ? '<button class="btn btn-link" data-act="deleteEvent">Delete</button>' : '') + '</div>'
     + '<div style="display:flex;gap:10px"><button class="btn btn-ghost" data-act="closeModal">Cancel</button><button class="btn btn-primary" data-act="saveEvent">' + (isEdit ? 'Save' : 'Add') + '</button></div></div>'
@@ -305,6 +311,7 @@ function saveEventFromForm() {
     start: allday ? '' : (document.getElementById('evStart').value || ''),
     end: allday ? '' : (document.getElementById('evEnd').value || ''),
     location: document.getElementById('evLoc').value.trim(),
+    link: document.getElementById('evLink').value.trim(),
     notes: document.getElementById('evNotes').value.trim(),
   };
   const i = state.events.findIndex(x => x.id === rec.id);
@@ -314,7 +321,7 @@ function saveEventFromForm() {
 function deleteEvent(id) { state.events = state.events.filter(x => x.id !== id); ui.modal = null; save(); render(); }
 function addEvents(list) {
   let n = 0;
-  list.forEach(r => { if (!r || !r.title || !r.date) return; state.events.push({ id: genId(), title: r.title, type: r.type || 'meeting', date: r.date, start: r.start || '', end: r.end || '', location: r.location || '', notes: r.notes || '' }); n++; });
+  list.forEach(r => { if (!r || !r.title || !r.date) return; state.events.push({ id: genId(), title: r.title, type: r.type || 'meeting', date: r.date, start: r.start || '', end: r.end || '', location: r.location || '', notes: r.notes || '', link: r.link || '' }); n++; });
   if (n) { save(); }
   return n;
 }
@@ -351,12 +358,24 @@ function parseICS(text) {
     else if (key === 'DTSTART') cur.s = parseICSDate(val, params);
     else if (key === 'DTEND') cur.e = parseICSDate(val, params);
     else if (key === 'LOCATION') cur.location = unescapeICS(val);
-    else if (key === 'DESCRIPTION') cur.notes = unescapeICS(val).slice(0, 500);
+    else if (key === 'DESCRIPTION') cur.desc = unescapeICS(val);
+    else if (key === 'URL') cur.url = val.trim();
+    else if (key === 'X-MICROSOFT-SKYPETEAMSMEETINGURL') cur.teams = val.trim();
   }
   return out.filter(v => v.s && v.title).map(v => ({
     title: v.title, date: v.s.date, start: v.s.time || '', end: (v.e && v.e.date === v.s.date) ? (v.e.time || '') : '',
-    type: 'meeting', location: v.location || '', notes: v.notes || '',
+    type: 'meeting', location: v.location || '', notes: (v.desc || '').slice(0, 500), link: findMeetingUrl(v),
   }));
+}
+// Pull a join link out of the invite (Teams property, URL, or the body/location).
+function findMeetingUrl(v) {
+  if (v.teams && /^https?:/i.test(v.teams)) return v.teams;
+  if (v.url && /^https?:/i.test(v.url)) return v.url;
+  const hay = (v.desc || '') + ' ' + (v.location || '');
+  const prov = /(https?:\/\/[^\s"'<>]*(?:teams\.microsoft|zoom\.us|meet\.google|webex\.com|gotomeet|whereby\.com|bluejeans|chime\.aws)[^\s"'<>]*)/i.exec(hay);
+  if (prov) return prov[1];
+  const any = /(https?:\/\/[^\s"'<>]+)/i.exec(v.desc || '');
+  return any ? any[1] : '';
 }
 function importIcsTextValue(text, sourceLabel) {
   const evs = parseICS(text);
@@ -412,6 +431,7 @@ async function importAiValue(text) {
  * Events / wiring
  * ============================================================ */
 document.addEventListener('click', e => {
+  if (e.target.closest('.joinLink')) return;   // let the join link open in a new tab
   const stop = e.target.closest('[data-stop]');
   const editEl = e.target.closest('[data-edit]');
   if (editEl) { const ev = state.events.find(x => x.id === editEl.getAttribute('data-edit')); if (ev) openEvent(Object.assign({ allday: !ev.start }, ev)); return; }
