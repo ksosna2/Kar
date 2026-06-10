@@ -1150,33 +1150,38 @@ function investmentsChartHtml() {
   const fallbackCost = investmentsCostChf();
   const costs = history.map(p => (p.c != null) ? p.c : fallbackCost);
   const lastC = costs[n - 1], haveCost = costs.some(c => c > 0);
-  const baseLast = haveCost ? lastC : history[0].v;   // headline baseline
+  // "All" shows total gain vs the amount invested; the 1D/1W/1M/1Y windows show
+  // the change over that window (vs the value at the window's start).
+  const periodMode = activePeriod.key !== 'ALL';
+  const costMode = !periodMode && haveCost;
+  const windowStart = history[0].v;
+  const baseLast = costMode ? lastC : windowStart;
   const change = last - baseLast;
   const dir = invDirOf(change), color = srcColor || (dir === 'up' ? 'var(--pos)' : dir === 'down' ? 'var(--neg)' : 'var(--muted)');
-  // Domain covers both the value line and the invested line.
-  const allY = haveCost ? vals.concat(costs) : vals.concat([baseLast]);
+  // Domain covers the value line (and the invested line in cost mode).
+  const allY = costMode ? vals.concat(costs) : vals;
   const domMin = Math.min.apply(null, allY), domMax = Math.max.apply(null, allY);
   const range = (domMax - domMin) || Math.max(1, Math.abs(domMax));
   const yOf = v => H - PAD - ((v - domMin) / range) * (H - PAD * 2);
   const pts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: yOf(vals[i]) }));
   const lineD = smoothPath(pts), lp = pts[n - 1], fp = pts[0];
   const areaD = lineD + ' L' + lp.x + ',' + H + ' L' + fp.x + ',' + H + ' Z';
-  // The "invested" reference line (cost over time) — rises as you buy in.
+  // The "invested" reference line (cost over time) — only meaningful in All view.
   let costLine = '', costLabel = '';
-  if (haveCost) {
+  if (costMode) {
     const costPts = history.map((p, i) => ({ x: (i / (n - 1)) * W, y: yOf(costs[i]) }));
     costLine = '<path class="invCostLine" fill="none" d="' + smoothPath(costPts) + '"/>';
     costLabel = '<div class="invCostLabel" style="top:' + ((costPts[n - 1].y / H) * 100).toFixed(1) + '%">invested</div>';
   }
 
-  invChartState = { ts: ts, vals: vals, costs: costs, baseLast: baseLast, xPct: pts.map(p => (p.x / W) * 100), yPct: pts.map(p => (p.y / H) * 100) };
+  invChartState = { ts: ts, vals: vals, costs: costs, costMode: costMode, windowStart: windowStart, baseLast: baseLast, xPct: pts.map(p => (p.x / W) * 100), yPct: pts.map(p => (p.y / H) * 100) };
 
   const axisIdx = n <= 4 ? history.map((_, i) => i) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1];
   const axis = axisIdx.map(i => '<span>' + esc(fmtChartDate(ts[i])) + '</span>').join('');
 
   return '<div class="invChartWrap"><div class="invChartHeadRow"><div class="chartHeadLeft">' + labelHtml
     + '<span class="invReadVal" id="invReadVal">' + esc(fmt(last)) + '</span>'
-    + '<span class="invReadDelta ' + dir + '" id="invReadDelta" title="' + (haveCost ? 'Gain/loss vs the amount invested by this date' : 'Change over the selected period') + '">' + esc(invDeltaStr(baseLast, last)) + '</span></div>' + periodToggle + '</div>'
+    + '<span class="invReadDelta ' + dir + '" id="invReadDelta" title="' + (costMode ? 'Total gain/loss vs the amount invested' : ('Change over ' + (activePeriod.key === 'ALL' ? 'all time' : activePeriod.label))) + '">' + esc(invDeltaStr(baseLast, last)) + '</span></div>' + periodToggle + '</div>'
     + '<div class="invChartStage" data-invchart>'
     + '<svg class="chartSvg invChartSvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden style="color:' + color + '">'
     + '<defs><linearGradient id="invGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.5"/><stop offset="60%" stop-color="currentColor" stop-opacity="0.16"/><stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>'
@@ -2211,8 +2216,8 @@ let invHoverActive = false;
 function invSetReadout(idx) {
   const st = invChartState; if (!st) return;
   const v = st.vals[idx];
-  // Baseline at this date = amount invested by then (or first value if no cost).
-  const base = (st.costs && st.costs[idx] > 0) ? st.costs[idx] : st.baseLast;
+  // Baseline: amount invested by then (All view) or the window-start value (1D/1W/…).
+  const base = st.costMode ? ((st.costs && st.costs[idx] > 0) ? st.costs[idx] : st.windowStart) : st.windowStart;
   const change = v - base;
   const valEl = document.getElementById('invReadVal'); if (valEl) valEl.textContent = fmt(v);
   const dEl = document.getElementById('invReadDelta'); if (dEl) { dEl.textContent = invDeltaStr(base, v); dEl.className = 'invReadDelta ' + invDirOf(change); }
