@@ -417,7 +417,7 @@ function photosHtml(){
   if(!latestP){
     body='<button class="photosEmptyTrigger" data-act="openGallery"><span class="photosTriggerIcon">◐</span><div class="photosEmptyTriggerText"><div class="photosTriggerLabel">Add your first photo</div><div class="photosTriggerCount">start a private timeline of your progress</div></div><span class="photosTriggerArrow">→</span></button>';
   }else{
-    body='<button class="photoPreview" data-act="view" data-id="'+latestP.id+'"><img src="'+latestP.dataUrl+'" alt="latest progress photo"><div class="photoPreviewGradient"></div><div class="photoPreviewMeta"><div><div class="photoPreviewDate">'+photoDate(latestP.dateKey).toUpperCase()+'</div>'+(latestP.weightLabel?'<div class="photoPreviewWeight">'+esc(latestP.weightLabel)+'</div>':'')+'</div><span class="photoPreviewArrow">↗</span></div></button>'
+    body='<button class="photoPreview" data-act="view" data-id="'+latestP.id+'"><img src="'+(latestP.url||latestP.dataUrl)+'" alt="latest progress photo"><div class="photoPreviewGradient"></div><div class="photoPreviewMeta"><div><div class="photoPreviewDate">'+photoDate(latestP.dateKey).toUpperCase()+'</div>'+(latestP.weightLabel?'<div class="photoPreviewWeight">'+esc(latestP.weightLabel)+'</div>':'')+'</div><span class="photoPreviewArrow">↗</span></div></button>'
       +'<div class="photoActionsRow"><button class="photoActionBtn photoActionPrimary" data-act="openGallery">Open gallery</button><button class="photoActionBtn photoActionSecondary" data-act="compareLatest"'+(photos.length<2?' disabled':'')+'>Compare</button></div>';
   }
   return '<section class="section"><div class="sectionEyebrowRow"><span class="sectionEyebrow">photos'+(count>0?' · '+count:'')+'</span>'+(latestP?'<span class="sectionEyebrowMeta">latest '+photoDate(latestP.dateKey)+'</span>':'')+'</div>'+body+'</section>';
@@ -446,7 +446,7 @@ function renderModals(){
     html+='<div class="overlay"><div class="overlayInner"><div class="overlayHead"><button class="overlayBack" data-act="closeGallery">←</button><div><div class="overlayEyebrow">memory</div><h2 class="overlayTitle">Progress</h2></div></div>'
       +'<div class="overlayActions"><button class="overlayAction overlayPrimary" data-act="addPhoto">Add photo</button></div>'
       +(photos.length===0?'<div class="photosEmpty"><p class="photosEmptyLine"><em>The first one is the hardest.</em></p><p class="photosEmptyHint">tap add photo to start a private timeline.</p></div>'
-        :'<div class="photoGrid">'+gallery.map(p=>'<button class="photoCard" data-act="view" data-id="'+p.id+'"><img src="'+p.dataUrl+'" alt=""><div class="photoOverlay"></div><div class="photoMeta"><span class="photoDate">'+photoDate(p.dateKey)+'</span>'+(p.weightLabel?'<span class="photoWeight">'+esc(p.weightLabel)+'</span>':'')+'</div></button>').join('')+'</div>')
+        :'<div class="photoGrid">'+gallery.map(p=>'<button class="photoCard" data-act="view" data-id="'+p.id+'"><img src="'+(p.url||p.dataUrl)+'" alt=""><div class="photoOverlay"></div><div class="photoMeta"><span class="photoDate">'+photoDate(p.dateKey)+'</span>'+(p.weightLabel?'<span class="photoWeight">'+esc(p.weightLabel)+'</span>':'')+'</div></button>').join('')+'</div>')
       +'</div></div>';
   }
   if(ui.viewerId){
@@ -455,12 +455,12 @@ function renderModals(){
       const cmp=ui.compareId?photos.find(x=>x.id===ui.compareId):null;
       const delLabel=ui.confirmDelete?'Confirm?':'Delete';const delCls='viewerBtn viewerDelete'+(ui.confirmDelete?' viewerConfirm':'');
       if(cmp){
-        html+='<div class="viewer"><div class="compareStage"><div class="compareSide"><img src="'+p.dataUrl+'"><div class="compareMeta">'+photoDate(p.dateKey)+(p.weightLabel?' · '+esc(p.weightLabel):'')+'</div></div>'
-          +'<button class="compareSide compareOther" data-act="cycleCompare"><img src="'+cmp.dataUrl+'"><div class="compareMeta">'+photoDate(cmp.dateKey)+(cmp.weightLabel?' · '+esc(cmp.weightLabel):'')+'</div></button></div>'
+        html+='<div class="viewer"><div class="compareStage"><div class="compareSide"><img src="'+(p.url||p.dataUrl)+'"><div class="compareMeta">'+photoDate(p.dateKey)+(p.weightLabel?' · '+esc(p.weightLabel):'')+'</div></div>'
+          +'<button class="compareSide compareOther" data-act="cycleCompare"><img src="'+(cmp.url||cmp.dataUrl)+'"><div class="compareMeta">'+photoDate(cmp.dateKey)+(cmp.weightLabel?' · '+esc(cmp.weightLabel):'')+'</div></button></div>'
           +'<div class="compareHeadline">'+photoDate(p.dateKey)+' → '+photoDate(cmp.dateKey)+'</div>'
           +'<div class="viewerActions"><button class="viewerBtn" data-act="backCompare">← Back</button><button class="viewerBtn" data-act="closeViewer">Close</button><button class="'+delCls+'" data-act="del">'+delLabel+'</button></div></div>';
       }else{
-        html+='<div class="viewer"><div class="viewerStage"><img src="'+p.dataUrl+'"></div><div class="viewerMeta"><div class="viewerDate">'+photoDate(p.dateKey).toUpperCase()+'</div>'+(p.weightLabel?'<div class="viewerWeight">'+esc(p.weightLabel)+'</div>':'')+'</div>'
+        html+='<div class="viewer"><div class="viewerStage"><img src="'+(p.url||p.dataUrl)+'"></div><div class="viewerMeta"><div class="viewerDate">'+photoDate(p.dateKey).toUpperCase()+'</div>'+(p.weightLabel?'<div class="viewerWeight">'+esc(p.weightLabel)+'</div>':'')+'</div>'
           +'<div class="viewerActions"><button class="viewerBtn" data-act="startCompare"'+(photos.length<2?' disabled':'')+'>Compare</button><button class="viewerBtn" data-act="closeViewer">Close</button><button class="'+delCls+'" data-act="del">'+delLabel+'</button></div></div>';
       }
     }

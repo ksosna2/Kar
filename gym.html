@@ -2819,18 +2819,39 @@ img, video, canvas, svg { max-width: 100%; }
   //   po_coach_weights : [{ dateKey:'YYYY-MM-DD', weight:Number }]
   //   po_coach_photos  : [{ id, dataUrl, dateKey, weight }]
   // ============================================================
-  const WT_KEY = 'po_coach_weights';
-  const PHOTO_KEY = 'po_coach_photos';
+  // Bodyweight + progress photos are SHARED with the Progress page so logging in
+  // either place keeps both in sync. Canonical store = the Progress page's keys
+  // (weight stored in kg). gym keeps its own display unit and converts.
+  const WT_KEY = 'po_coach_weights';                       // legacy (migrated once)
+  const PHOTO_KEY_LEGACY = 'po_coach_photos';              // legacy (migrated once)
+  const SHARED_WEIGHT_KEY = 'progress_standalone_v1';
+  const PHOTO_KEY = 'progress_standalone_photos_v1';
 
+  function kgToDisp(kg) { return state.units === 'lb' ? kg * 2.20462 : kg; }
+  function dispToKg(v) { return state.units === 'lb' ? v / 2.20462 : v; }
+  function loadSharedWeight() {
+    try { const r = localStorage.getItem(SHARED_WEIGHT_KEY); if (!r) return null; const p = JSON.parse(r); return (p && Array.isArray(p.entries)) ? p : null; } catch (e) { return null; }
+  }
   function wtLoad() {
-    try {
-      const raw = localStorage.getItem(WT_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr.sort((a,b) => a.dateKey.localeCompare(b.dateKey)) : [];
-    } catch (e) { return []; }
+    let shared = loadSharedWeight();
+    // One-time merge of legacy gym weights (display units) into the shared kg store.
+    let legacy = [];
+    try { const raw = localStorage.getItem(WT_KEY); const a = raw ? JSON.parse(raw) : []; if (Array.isArray(a)) legacy = a; } catch (e) {}
+    if (legacy.length) {
+      const obj = shared || { units: state.units, entries: [] };
+      const have = {}; obj.entries.forEach(e => { have[e.dateKey] = true; });
+      legacy.forEach(e => { if (e && e.dateKey != null && !have[e.dateKey]) { obj.entries.push({ dateKey: e.dateKey, weightKg: dispToKg(Number(e.weight) || 0) }); have[e.dateKey] = true; } });
+      obj.entries.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+      let ok = false; try { localStorage.setItem(SHARED_WEIGHT_KEY, JSON.stringify(obj)); ok = true; } catch (e) {}
+      if (ok) { try { localStorage.removeItem(WT_KEY); } catch (e) {} shared = obj; }
+    }
+    if (!shared) return [];
+    return shared.entries.slice().sort((a, b) => a.dateKey.localeCompare(b.dateKey)).map(e => ({ dateKey: e.dateKey, weight: kgToDisp(Number(e.weightKg) || 0) }));
   }
   function wtSave(arr) {
-    try { localStorage.setItem(WT_KEY, JSON.stringify(arr)); } catch (e) {}
+    const obj = loadSharedWeight() || { units: state.units, entries: [] };
+    obj.entries = arr.map(e => ({ dateKey: e.dateKey, weightKg: dispToKg(Number(e.weight) || 0) }));
+    try { localStorage.setItem(SHARED_WEIGHT_KEY, JSON.stringify(obj)); } catch (e) {}
   }
   function wtDateKey(d) {
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -3154,8 +3175,20 @@ img, video, canvas, svg { max-width: 100%; }
   let photos = [];
   try {
     const raw = localStorage.getItem(PHOTO_KEY);
-    if (raw) photos = JSON.parse(raw);
+    if (raw) photos = JSON.parse(raw) || [];
   } catch (e) { photos = []; }
+  // One-time merge of legacy gym photos into the shared store (dedup by id).
+  try {
+    const lr = localStorage.getItem(PHOTO_KEY_LEGACY);
+    if (lr) {
+      const legacy = JSON.parse(lr) || [];
+      const have = {}; photos.forEach(p => { if (p && p.id) have[p.id] = true; });
+      legacy.forEach(p => { if (p && p.id && !have[p.id]) { p.weightLabel = p.weightLabel || p.weight || ''; photos.push(p); have[p.id] = true; } });
+      photos.sort((a, b) => (b.dateKey || '').localeCompare(a.dateKey || ''));   // newest first
+      let ok = false; try { localStorage.setItem(PHOTO_KEY, JSON.stringify(photos)); ok = true; } catch (e) {}
+      if (ok) { try { localStorage.removeItem(PHOTO_KEY_LEGACY); } catch (e) {} }
+    }
+  } catch (e) {}
 
   function photosSave() {
     try {
@@ -3211,7 +3244,7 @@ img, video, canvas, svg { max-width: 100%; }
           '<div class="wt-photo-overlay"></div>' +
           '<div class="wt-photo-meta">' +
             '<span class="wt-photo-date">' + photoFmtDate(p.dateKey) + '</span>' +
-            '<span class="wt-photo-weight">' + (p.weight || '—') + '</span>' +
+            '<span class="wt-photo-weight">' + (p.weightLabel || p.weight || '—') + '</span>' +
           '</div>' +
         '</button>'
       ).join('');
@@ -3250,7 +3283,7 @@ img, video, canvas, svg { max-width: 100%; }
       id,
       dataUrl: compressed,
       dateKey: wtDateKey(new Date()),
-      weight: photoCurrentWeight()
+      weightLabel: photoCurrentWeight()
     };
     photos.unshift(entry);
     if (!photosSave()) {
@@ -3364,7 +3397,7 @@ img, video, canvas, svg { max-width: 100%; }
     activePhotoId = id;
     $('wtViewerImg').src = p.url || p.dataUrl;
     $('wtViewerDate').textContent = photoFmtDate(p.dateKey).toUpperCase();
-    $('wtViewerWeight').textContent = p.weight || '—';
+    $('wtViewerWeight').textContent = p.weightLabel || p.weight || '—';
     $('wtViewer').dataset.mode = 'single';
     $('wtViewer').classList.add('is-open');
     pvDeleteConfirm = false;
@@ -3414,8 +3447,8 @@ img, video, canvas, svg { max-width: 100%; }
     comparePhotoId = otherId;
     $('wtCmpImgA').src = A.url || A.dataUrl;
     $('wtCmpImgB').src = B.url || B.dataUrl;
-    $('wtCmpMetaA').textContent = photoFmtDate(A.dateKey) + ' · ' + (A.weight || '—');
-    $('wtCmpMetaB').textContent = photoFmtDate(B.dateKey) + ' · ' + (B.weight || '—');
+    $('wtCmpMetaA').textContent = photoFmtDate(A.dateKey) + ' · ' + (A.weightLabel || A.weight || '—');
+    $('wtCmpMetaB').textContent = photoFmtDate(B.dateKey) + ' · ' + (B.weightLabel || B.weight || '—');
     // Headline — date arrow + weight delta
     const wA = parseWeightStr(A.weight);
     const wB = parseWeightStr(B.weight);
