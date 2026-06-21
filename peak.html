@@ -601,6 +601,8 @@ function chartSvg(){
   if(PEAK){ const px=xOf(PEAK.t),py=yOf(PEAK.e); pk='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.5" fill="#11192A" stroke="#BFA23E" stroke-width="2"/>'; }
   return '<svg class="chartSvg" id="chartSvg" viewBox="0 0 '+CW+' '+CH+'" preserveAspectRatio="none">'+defs+gridLines()+sleepMarkers()+crashMarkers()+nowMarker()+body+pk+'</svg>';
 }
+/* crash = the deepest negative dip caffeine drags you to (adenosine rebound) */
+function caffeineCrash(){ let mt=null,mv=0; for(let t=0;t<=24;t+=0.25){ const v=caffNet(t); if(v<mv){mv=v;mt=t;} } return (mt!=null&&mv<-3)?{t:mt,v:mv}:null; }
 function crashMarkers(){ const cc=caffeineCrash(); let s='';
   const ln=t=>{ const x=xOf(t); return '<line x1="'+x.toFixed(1)+'" y1="0" x2="'+x.toFixed(1)+'" y2="'+(CH-PADB)+'" stroke="#CF7A6B" stroke-width="1.4" stroke-dasharray="4 4" opacity=".7"/>'; };
   if(cc)s+=ln(cc.t); return s;
@@ -903,7 +905,7 @@ function render(){
 
   const footNote='<p class="footNote">Peak is a science-based estimate from your own data — not a medical measurement. It personalizes to you over ~30 days. Tap the “i” to see how it’s calculated.</p>';
   document.getElementById('app').innerHTML=head+srcRow+mCard+tk+daySec+nowSec+cafSec+waterSec+suppSec+footNote;
-  bindScrub(); bindFeel(); bindCaf(); bindMed();
+  bindScrub(); bindFeel(); bindCaf();
 }
 function feelBarHtml(){
   const f=latestFeelToday(); const val=f!=null?f:Math.round(energyAt(nowT()).e);
