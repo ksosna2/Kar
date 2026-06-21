@@ -1706,8 +1706,7 @@ body::after {
     {file:'progress.html',name:'Progress',tag:'Photos & measurements',icon:'📈',obj:'progress'},
     {file:'macros.html',name:'Macros',tag:'Protein · carbs · fat',icon:'🍳',obj:'macros'},
     {file:'calendar.html',name:'Calendar',tag:'Weekly schedule · meetings · deadlines',icon:'🗓️',obj:'calendar',wide:true},
-    {file:'peak.html',name:'Peak',tag:'Daily readiness · energy curve',icon:'🔆',wide:true},
-    {file:'meds.html',name:'Meds',tag:'Doses · peak & comedown timing',icon:'💊'}
+    {file:'peak.html',name:'Peak',tag:'Daily readiness · energy curve',icon:'🔆',wide:true}
   ];
   function cardHtml(a){ var st=statFor(a.file); var isNw=a.file==='finance.html'&&!!st; var valCls='cardStatValue'+(isNw?' nwValue'+(nwRevealed?'':' nwBlur'):''); var valExtra=isNw?' data-nw="1" title="'+(nwRevealed?'Tap to hide net worth':'Tap to reveal net worth')+'"':''; var tail=st?'<div class="cardStat"><span class="'+valCls+'"'+valExtra+'>'+esc(st.value)+'</span><span class="cardStatLabel">'+esc(st.label)+'</span></div>':'<p class="cardTag">'+esc(a.tag)+'</p>'; return '<a class="card'+(a.wide?' tileWide':'')+'" href="'+a.file+'"><span class="cardArrow" aria-hidden>↗</span><div class="cardTop">'+(a.obj?'<span class="cardIcon3d" aria-hidden><span class="kar3d" data-obj="'+a.obj+'"></span></span>':'<span class="cardIcon" aria-hidden>'+a.icon+'</span>')+'<span class="cardName">'+esc(a.name)+'</span></div>'+tail+'</a>'; }
   function renderGrid(){ var g=document.getElementById('moduleGrid'); if(!g)return; g.innerHTML=APPS.map(cardHtml).join(''); if(window.KAR3D)KAR3D.mount(); }
